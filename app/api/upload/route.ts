@@ -47,11 +47,19 @@ export async function POST(request: NextRequest) {
       rawTextUrl: `data:${file.type};base64,${buffer.toString('base64')}`,
     });
 
+    // Trigger processing asynchronously
+    const baseUrl = request.nextUrl.origin;
+    fetch(`${baseUrl}/api/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentId: document.id }),
+    }).catch(err => console.error('Failed to trigger processing:', err));
+
     return NextResponse.json({
       documentId: document.id,
       filename: document.filename,
       size: document.size,
-      status: document.status,
+      status: 'processing',
     });
 
   } catch (error) {
