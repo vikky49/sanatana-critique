@@ -1,6 +1,13 @@
 import Groq from 'groq-sdk';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let groq: Groq | null = null;
+
+function getGroqClient(): Groq {
+  if (!groq) {
+    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+  return groq;
+}
 
 interface CompletionOptions {
   model?: string;
@@ -19,7 +26,8 @@ export async function complete(
     maxTokens = 8000,
   } = options;
 
-  const completion = await groq.chat.completions.create({
+  const client = getGroqClient();
+  const completion = await client.chat.completions.create({
     model,
     messages: [
       { role: 'system', content: systemPrompt },
