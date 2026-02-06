@@ -1,12 +1,4 @@
-const pdf = require('pdf-parse');
-
-type PDFData = {
-  text: string;
-  numpages: number;
-  info: any;
-  metadata: any;
-  version: string;
-};
+import { extractText } from 'unpdf';
 
 export interface TextChunk {
   text: string;
@@ -16,8 +8,8 @@ export interface TextChunk {
 }
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const data = await pdf(buffer);
-  return data.text;
+  const result = await extractText(buffer, { mergePages: true });
+  return result.text;
 }
 
 export function chunkText(text: string, maxChunkSize: number = 25000): TextChunk[] {

@@ -36,7 +36,7 @@ interface VerseInput {
 }
 
 export async function insertBook(data: BookInput): Promise<Book> {
-  const result = await getSql()`
+  const result = await getSql()` as any[]
     INSERT INTO books (
       document_id, title, description, language, 
       total_chapters, total_verses, processed_at
@@ -46,7 +46,7 @@ export async function insertBook(data: BookInput): Promise<Book> {
       ${data.totalChapters}, ${data.totalVerses}, NOW()
     )
     RETURNING *
-  `;
+  ` as any[];
 
   const row = result[0];
   return {
@@ -63,11 +63,11 @@ export async function insertBook(data: BookInput): Promise<Book> {
 }
 
 export async function insertChapter(data: ChapterInput): Promise<Chapter> {
-  const result = await getSql()`
+  const result = await getSql()` as any[]
     INSERT INTO chapters (book_id, number, title, verse_count)
     VALUES (${data.bookId}, ${data.number}, ${data.title}, ${data.verseCount})
     RETURNING *
-  `;
+  ` as any[];
 
   const row = result[0];
   return {
@@ -80,7 +80,7 @@ export async function insertChapter(data: ChapterInput): Promise<Chapter> {
 }
 
 export async function insertVerse(data: VerseInput): Promise<Verse> {
-  const result = await getSql()`
+  const result = await getSql()` as any[]
     INSERT INTO verses (
       book_id, chapter_number, verse_number, 
       original_text, translation
@@ -90,7 +90,7 @@ export async function insertVerse(data: VerseInput): Promise<Verse> {
       ${data.originalText}, ${data.translation}
     )
     RETURNING *
-  `;
+  ` as any[];
 
   const row = result[0];
   return {
@@ -117,7 +117,7 @@ interface AnalysisInput {
 }
 
 export async function insertAnalysis(data: AnalysisInput) {
-  const result = await getSql()`
+  const result = await getSql()` as any[]
     INSERT INTO analyses (
       verse_id, model, generated_at,
       modern_ethics, gender_analysis, caste_analysis,
@@ -131,15 +131,15 @@ export async function insertAnalysis(data: AnalysisInput) {
       ${data.summary}
     )
     RETURNING *
-  `;
+  ` as any[];
 
   return result[0];
 }
 
 export async function updateVerseAnalyzed(verseId: string) {
-  await getSql()`
+  await getSql()` as any[]
     UPDATE verses
     SET analyzed = true
     WHERE id = ${verseId}
-  `;
+  ` as any[];
 }

@@ -13,11 +13,11 @@ function getSql() {
 
 export class NeonDatabase implements Database {
   async createDocument(doc: Omit<Document, 'id' | 'uploadedAt'>): Promise<Document> {
-    const result = await getSql()`
+    const result = await getSql()` as any[]
       INSERT INTO documents (filename, title, file_type, size, status, raw_text_url)
       VALUES (${doc.filename}, ${doc.title}, ${doc.fileType}, ${doc.size}, ${doc.status}, ${doc.rawTextUrl})
       RETURNING *
-    `;
+    ` as any[];
 
     const row = result[0];
     return {
@@ -33,9 +33,9 @@ export class NeonDatabase implements Database {
   }
 
   async getDocument(id: string): Promise<Document | null> {
-    const result = await getSql()`
+    const result = await getSql()` as any[]
       SELECT * FROM documents WHERE id = ${id}
-    `;
+    ` as any[];
 
     if (result.length === 0) return null;
 
@@ -53,9 +53,9 @@ export class NeonDatabase implements Database {
   }
 
   async updateDocumentStatus(id: string, status: Document['status']): Promise<void> {
-    await getSql()`
+    await getSql()` as any[]
       UPDATE documents SET status = ${status} WHERE id = ${id}
-    `;
+    ` as any[];
   }
 
   // Placeholder implementations - we'll add these as needed

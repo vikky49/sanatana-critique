@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       : '';
 
     // Build query with filters using template literal
-    let result;
+    let result: any[];
     if (bookId && chapterNumber) {
       result = await getSql()`
         SELECT 
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN analyses a ON v.id = a.verse_id
         WHERE v.book_id = ${bookId} AND v.chapter_number = ${parseInt(chapterNumber)}
         ORDER BY v.book_id, v.chapter_number, v.verse_number
-      `;
+      ` as any[];
     } else if (bookId) {
       result = await getSql()`
         SELECT 
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN analyses a ON v.id = a.verse_id
         WHERE v.book_id = ${bookId}
         ORDER BY v.book_id, v.chapter_number, v.verse_number
-      `;
+      ` as any[];
     } else {
       result = await getSql()`
         SELECT 
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
         JOIN books b ON v.book_id = b.id
         LEFT JOIN analyses a ON v.id = a.verse_id
         ORDER BY v.book_id, v.chapter_number, v.verse_number
-      `;
+      ` as any[];
     }
 
     const verses = result.map((row: any) => ({
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       WHERE v.book_id = ${bookId}
         AND v.chapter_number = ${chapterNumber}
         AND v.verse_number = ${verseNumber}
-    `;
+    ` as any[];
 
     if (verseResult.length === 0) {
       return NextResponse.json(
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       WHERE verse_id = ${verseId}
       ORDER BY generated_at DESC
       LIMIT 1
-    `;
+    ` as any[];
 
     if (existingAnalysis.length > 0) {
       const analysis = existingAnalysis[0];
