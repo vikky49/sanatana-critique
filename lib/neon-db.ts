@@ -2,11 +2,18 @@ import { neon } from '@neondatabase/serverless';
 import type { Database } from './db';
 import type { Document } from '@/types';
 
-const sql = neon(process.env.DATABASE_URL!);
+let sql: ReturnType<typeof neon> | null = null;
+
+function getSql() {
+  if (!sql) {
+    sql = neon(process.env.DATABASE_URL!);
+  }
+  return sql;
+}
 
 export class NeonDatabase implements Database {
   async createDocument(doc: Omit<Document, 'id' | 'uploadedAt'>): Promise<Document> {
-    const result = await sql`
+    const result = await getSql()`
       INSERT INTO documents (filename, title, file_type, size, status, raw_text_url)
       VALUES (${doc.filename}, ${doc.title}, ${doc.fileType}, ${doc.size}, ${doc.status}, ${doc.rawTextUrl})
       RETURNING *
@@ -26,7 +33,7 @@ export class NeonDatabase implements Database {
   }
 
   async getDocument(id: string): Promise<Document | null> {
-    const result = await sql`
+    const result = await getSql()`
       SELECT * FROM documents WHERE id = ${id}
     `;
 
@@ -46,7 +53,7 @@ export class NeonDatabase implements Database {
   }
 
   async updateDocumentStatus(id: string, status: Document['status']): Promise<void> {
-    await sql`
+    await getSql()`
       UPDATE documents SET status = ${status} WHERE id = ${id}
     `;
   }

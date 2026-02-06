@@ -4,7 +4,12 @@ import { complete, extractJSON } from '@/lib/llm';
 import { loadPrompt } from '@/lib/prompts';
 import { insertAnalysis, updateVerseAnalyzed } from '@/lib/db-operations';
 
-const sql = neon(process.env.DATABASE_URL!);
+let sql: ReturnType<typeof neon> | null = null;
+
+function getSql() {
+  if (!sql) { sql = neon(process.env.DATABASE_URL!); }
+  return sql;
+}
 
 interface AnalysisResult {
   modernEthics: string;
@@ -80,7 +85,7 @@ export async function GET(request: NextRequest) {
       ORDER BY v.book_id, v.chapter_number, v.verse_number
     `;
 
-    const result = await sql(query, params);
+    const result = await getSql()(query, params);
 
     const verses = result.map((row: any) => ({
       verse: {
@@ -132,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch verse
-    const verseResult = await sql`
+    const verseResult = await getSql()`
       SELECT v.*, b.title as book_title
       FROM verses v
       JOIN books b ON v.book_id = b.id
@@ -152,7 +157,7 @@ export async function POST(request: NextRequest) {
     const verseId = verse.id;
 
     // Check if analysis exists
-    const existingAnalysis = await sql`
+    const existingAnalysis = await getSql()`
       SELECT * FROM analyses
       WHERE verse_id = ${verseId}
       ORDER BY generated_at DESC

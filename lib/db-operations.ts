@@ -2,7 +2,14 @@ import { neon } from '@neondatabase/serverless';
 import { loadQuery } from './sql-loader';
 import type { Book, Chapter, Verse } from '@/types';
 
-const sql = neon(process.env.DATABASE_URL!);
+let sql: ReturnType<typeof neon> | null = null;
+
+function getSql() {
+  if (!sql) {
+    sql = neon(process.env.DATABASE_URL!);
+  }
+  return sql;
+}
 
 interface BookInput {
   documentId: string;
@@ -29,7 +36,7 @@ interface VerseInput {
 }
 
 export async function insertBook(data: BookInput): Promise<Book> {
-  const result = await sql`
+  const result = await getSql()`
     INSERT INTO books (
       document_id, title, description, language, 
       total_chapters, total_verses, processed_at
@@ -56,7 +63,7 @@ export async function insertBook(data: BookInput): Promise<Book> {
 }
 
 export async function insertChapter(data: ChapterInput): Promise<Chapter> {
-  const result = await sql`
+  const result = await getSql()`
     INSERT INTO chapters (book_id, number, title, verse_count)
     VALUES (${data.bookId}, ${data.number}, ${data.title}, ${data.verseCount})
     RETURNING *
@@ -73,7 +80,7 @@ export async function insertChapter(data: ChapterInput): Promise<Chapter> {
 }
 
 export async function insertVerse(data: VerseInput): Promise<Verse> {
-  const result = await sql`
+  const result = await getSql()`
     INSERT INTO verses (
       book_id, chapter_number, verse_number, 
       original_text, translation
@@ -110,7 +117,7 @@ interface AnalysisInput {
 }
 
 export async function insertAnalysis(data: AnalysisInput) {
-  const result = await sql`
+  const result = await getSql()`
     INSERT INTO analyses (
       verse_id, model, generated_at,
       modern_ethics, gender_analysis, caste_analysis,
@@ -130,7 +137,7 @@ export async function insertAnalysis(data: AnalysisInput) {
 }
 
 export async function updateVerseAnalyzed(verseId: string) {
-  await sql`
+  await getSql()`
     UPDATE verses
     SET analyzed = true
     WHERE id = ${verseId}
