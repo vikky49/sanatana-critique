@@ -53,39 +53,88 @@ async function getDocumentText(documentId: string): Promise<string> {
   return buffer.toString('utf-8');
 }
 
+// Pure function: Parse a single chunk
+async function parseChunk(
+  chunkText: string,
+  chunkIndex: number,
+  totalChunks: number,
+  systemPrompt: string
+): Promise<ParsedDocument | null> {
+  const userPrompt = `Parse this religious text (part ${chunkIndex + 1} of ${totalChunks}):\n\n${chunkText}\n\nReturn chapters and verses found in this section.`;
+  
+  try {
+    const response = await complete(systemPrompt, userPrompt, { maxTokens: 16000 });
+    return extractJSON<ParsedDocument>(response);
+  } catch (error) {
+    console.error(`Failed to parse chunk ${chunkIndex + 1}:`, error);
+    return null;
+  }
+}
+
+// Pure function: Merge chapters from multiple parsed documents
+const mergeChapters = (chapters: ParsedDocument['chapters'][]): ParsedDocument['chapters'] => {
+  const chapterMap = new Map<number, ParsedDocument['chapters'][0]>();
+  
+  chapters.forEach(chapterList => {
+    chapterList.forEach(chapter => {
+      const existing = chapterMap.get(chapter.number);
+      if (existing) {
+        existing.verses.push(...chapter.verses);
+      } else {
+        chapterMap.set(chapter.number, { ...chapter });
+      }
+    });
+  });
+  
+  return Array.from(chapterMap.values()).sort((a, b) => a.number - b.number);
+};
+
+// Pure function: Extract metadata from first valid document
+const extractMetadata = (documents: (ParsedDocument | null)[]): Pick<ParsedDocument, 'title' | 'description' | 'language'> => {
+  const firstValid = documents.find(doc => doc !== null);
+  return {
+    title: firstValid?.title || 'Unknown',
+    description: firstValid?.description || 'No description',
+    language: firstValid?.language || 'Unknown',
+  };
+};
+
 async function parseDocument(text: string): Promise<ParsedDocument> {
   const systemPrompt = loadPrompt('parse-document');
-  
-  // If text is too large, chunk it and parse in multiple requests
   const maxChunkSize = 25000;
-  if (text.length > maxChunkSize) {
-    console.log(`Text is ${text.length} chars, chunking into smaller pieces...`);
-    const chunks = chunkText(text, maxChunkSize);
-    
-    // Parse first chunk to get structure
-    const firstChunk = chunks[0];
-    const userPrompt = `Parse this religious text (part 1 of ${chunks.length}):\n\n${firstChunk.text}`;
-    
-    const response = await complete(systemPrompt, userPrompt, {
-      maxTokens: 16000,
-    });
-    
-    const parsed = extractJSON<ParsedDocument>(response);
-    
-    // TODO: Parse remaining chunks and merge results
-    // For now, just return first chunk results
-    console.log(`Parsed first chunk. Found ${parsed.chapters.length} chapters.`);
-    return parsed;
+  
+  if (text.length <= maxChunkSize) {
+    const userPrompt = `Parse this religious text:\n\n${text}`;
+    const response = await complete(systemPrompt, userPrompt, { maxTokens: 16000 });
+    return extractJSON<ParsedDocument>(response);
   }
   
-  // Small text, parse in one go
-  const userPrompt = `Parse this religious text:\n\n${text}`;
-
-  const response = await complete(systemPrompt, userPrompt, {
-    maxTokens: 16000,
-  });
-
-  return extractJSON<ParsedDocument>(response);
+  // Multi-chunk parsing
+  console.log(`Text is ${text.length} chars, chunking into ${Math.ceil(text.length / maxChunkSize)} pieces`);
+  const chunks = chunkText(text, maxChunkSize);
+  console.log(`Parsing ${chunks.length} chunks sequentially`);
+  
+  // Parse chunks sequentially to avoid rate limits
+  const parsedDocs = [];
+  for (let i = 0; i < chunks.length; i++) {
+    console.log(`Processing chunk ${i + 1}/${chunks.length}`);
+    const result = await parseChunk(chunks[i].text, i, chunks.length, systemPrompt);
+    parsedDocs.push(result);
+  }
+  
+  // Combine results functionally
+  const validDocs = parsedDocs.filter((doc): doc is ParsedDocument => doc !== null);
+  const metadata = extractMetadata(validDocs);
+  const allChapterLists = validDocs.map(doc => doc.chapters);
+  const mergedChapters = mergeChapters(allChapterLists);
+  
+  const totalVerses = mergedChapters.reduce((sum, ch) => sum + ch.verses.length, 0);
+  console.log(`Parsing complete: ${mergedChapters.length} chapters, ${totalVerses} verses`);
+  
+  return {
+    ...metadata,
+    chapters: mergedChapters,
+  };
 }
 
 async function storeParsedData(documentId: string, parsed: ParsedDocument) {

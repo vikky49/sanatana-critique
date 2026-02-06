@@ -1,227 +1,92 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
-import { complete, extractJSON } from '@/lib/llm';
-import { loadPrompt } from '@/lib/prompts';
-import { insertAnalysis, updateVerseAnalyzed } from '@/lib/db-operations';
+import {NextRequest, NextResponse} from 'next/server';
+import {Pool} from '@neondatabase/serverless';
+import {complete, extractJSON} from '@/lib/llm';
+import {loadPrompt} from '@/lib/prompts';
+import {loadQuery} from '@/lib/sql-loader';
+import {insertAnalysis, updateVerseAnalyzed} from '@/lib/db-operations';
 
-let sql: ReturnType<typeof neon> | null = null;
-
-function getSql() {
-  if (!sql) { sql = neon(process.env.DATABASE_URL!); }
-  return sql;
-}
+// ============================================================================
+// Types
+// ============================================================================
 
 interface AnalysisResult {
-  modernEthics: string;
-  genderAnalysis: string;
-  casteAnalysis: string;
-  contradictions: string;
-  problematicScore: number;
-  tags: string[];
-  summary: string;
+    modernEthics: string;
+    genderAnalysis: string;
+    casteAnalysis: string;
+    contradictions: string;
+    problematicScore: number;
+    tags: string[];
+    summary: string;
 }
 
-// GET - Fetch all verses with their analyses
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const bookId = searchParams.get('bookId');
-    const chapterNumber = searchParams.get('chapterNumber');
-    const minScore = searchParams.get('minScore');
-    const tags = searchParams.get('tags')?.split(',').filter(Boolean);
-
-    // Build dynamic WHERE clause
-    const conditions: string[] = [];
-    const params: any[] = [];
-
-    if (bookId) {
-      conditions.push(`v.book_id = $${params.length + 1}`);
-      params.push(bookId);
-    }
-
-    if (chapterNumber) {
-      conditions.push(`v.chapter_number = $${params.length + 1}`);
-      params.push(parseInt(chapterNumber));
-    }
-
-    if (minScore) {
-      conditions.push(`a.problematic_score >= $${params.length + 1}`);
-      params.push(parseInt(minScore));
-    }
-
-    if (tags && tags.length > 0) {
-      conditions.push(`a.tags && $${params.length + 1}::text[]`);
-      params.push(tags);
-    }
-
-    const whereClause = conditions.length > 0 
-      ? 'AND ' + conditions.join(' AND ')
-      : '';
-
-    // Build query with filters using template literal
-    let result: any[];
-    if (bookId && chapterNumber) {
-      result = await getSql()`
-        SELECT 
-          v.id as verse_id,
-          v.book_id,
-          v.chapter_number,
-          v.verse_number,
-          v.original_text,
-          v.translation,
-          v.analyzed,
-          b.title as book_title,
-          a.id as analysis_id,
-          a.model,
-          a.generated_at,
-          a.modern_ethics,
-          a.gender_analysis,
-          a.caste_analysis,
-          a.contradictions,
-          a.problematic_score,
-          a.tags,
-          a.summary
-        FROM verses v
-        JOIN books b ON v.book_id = b.id
-        LEFT JOIN analyses a ON v.id = a.verse_id
-        WHERE v.book_id = ${bookId} AND v.chapter_number = ${parseInt(chapterNumber)}
-        ORDER BY v.book_id, v.chapter_number, v.verse_number
-      ` as any[];
-    } else if (bookId) {
-      result = await getSql()`
-        SELECT 
-          v.id as verse_id,
-          v.book_id,
-          v.chapter_number,
-          v.verse_number,
-          v.original_text,
-          v.translation,
-          v.analyzed,
-          b.title as book_title,
-          a.id as analysis_id,
-          a.model,
-          a.generated_at,
-          a.modern_ethics,
-          a.gender_analysis,
-          a.caste_analysis,
-          a.contradictions,
-          a.problematic_score,
-          a.tags,
-          a.summary
-        FROM verses v
-        JOIN books b ON v.book_id = b.id
-        LEFT JOIN analyses a ON v.id = a.verse_id
-        WHERE v.book_id = ${bookId}
-        ORDER BY v.book_id, v.chapter_number, v.verse_number
-      ` as any[];
-    } else {
-      result = await getSql()`
-        SELECT 
-          v.id as verse_id,
-          v.book_id,
-          v.chapter_number,
-          v.verse_number,
-          v.original_text,
-          v.translation,
-          v.analyzed,
-          b.title as book_title,
-          a.id as analysis_id,
-          a.model,
-          a.generated_at,
-          a.modern_ethics,
-          a.gender_analysis,
-          a.caste_analysis,
-          a.contradictions,
-          a.problematic_score,
-          a.tags,
-          a.summary
-        FROM verses v
-        JOIN books b ON v.book_id = b.id
-        LEFT JOIN analyses a ON v.id = a.verse_id
-        ORDER BY v.book_id, v.chapter_number, v.verse_number
-      ` as any[];
-    }
-
-    const verses = result.map((row: any) => ({
-      verse: {
-        id: row.verse_id,
-        bookId: row.book_id,
-        bookTitle: row.book_title,
-        chapterNumber: row.chapter_number,
-        verseNumber: row.verse_number,
-        originalText: row.original_text,
-        translation: row.translation,
-        analyzed: row.analyzed,
-      },
-      analysis: row.analysis_id ? {
-        id: row.analysis_id,
-        model: row.model,
-        generatedAt: row.generated_at,
-        modernEthics: row.modern_ethics,
-        genderAnalysis: row.gender_analysis,
-        casteAnalysis: row.caste_analysis,
-        contradictions: row.contradictions,
-        problematicScore: row.problematic_score,
-        tags: row.tags,
-        summary: row.summary,
-      } : null,
-    }));
-
-    return NextResponse.json({ verses });
-
-  } catch (error) {
-    console.error('Fetch analyses error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch analyses' },
-      { status: 500 }
-    );
-  }
+interface VerseRow {
+    id: string;
+    book_id: string;
+    chapter_number: number;
+    verse_number: number;
+    original_text: string;
+    translation: string;
+    analyzed: boolean;
+    book_title: string;
 }
 
-// POST - Generate analysis on-demand
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { bookId, chapterNumber, verseNumber } = body;
+interface AnalysisRow {
+    id: string;
+    verse_id: string;
+    model: string;
+    generated_at: string;
+    modern_ethics: string;
+    gender_analysis: string;
+    caste_analysis: string;
+    contradictions: string;
+    problematic_score: number;
+    tags: string[];
+    summary: string;
+}
 
-    if (!bookId || chapterNumber === undefined || verseNumber === undefined) {
-      return NextResponse.json(
-        { error: 'bookId, chapterNumber, and verseNumber are required' },
-        { status: 400 }
-      );
+interface VerseWithAnalysisRow extends VerseRow {
+    analysis_id: string | null;
+    model: string | null;
+    generated_at: string | null;
+    modern_ethics: string | null;
+    gender_analysis: string | null;
+    caste_analysis: string | null;
+    contradictions: string | null;
+    problematic_score: number | null;
+    tags: string[] | null;
+    summary: string | null;
+}
+
+interface QueryParams {
+    bookId?: string;
+    chapterNumber?: number;
+}
+
+interface AnalyzeRequestBody {
+    bookId: string;
+    chapterNumber: number;
+    verseNumber: number;
+}
+
+// ============================================================================
+// Database
+// ============================================================================
+
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+    if (!pool) {
+        pool = new Pool({connectionString: process.env.DATABASE_URL!});
     }
+    return pool;
+}
 
-    // Fetch verse
-    const verseResult = await getSql()`
-      SELECT v.*, b.title as book_title
-      FROM verses v
-      JOIN books b ON v.book_id = b.id
-      WHERE v.book_id = ${bookId}
-        AND v.chapter_number = ${chapterNumber}
-        AND v.verse_number = ${verseNumber}
-    ` as any[];
+// ============================================================================
+// Response Formatters
+// ============================================================================
 
-    if (verseResult.length === 0) {
-      return NextResponse.json(
-        { error: 'Verse not found' },
-        { status: 404 }
-      );
-    }
-
-    const verse = verseResult[0];
-    const verseId = verse.id;
-
-    // Check if analysis exists
-    const existingAnalysis = await getSql()`
-      SELECT * FROM analyses
-      WHERE verse_id = ${verseId}
-      ORDER BY generated_at DESC
-      LIMIT 1
-    ` as any[];
-
-    if (existingAnalysis.length > 0) {
-      const analysis = existingAnalysis[0];
-      return NextResponse.json({
+function formatAnalysisResponse(analysis: AnalysisRow) {
+    return {
         id: analysis.id,
         verseId: analysis.verse_id,
         model: analysis.model,
@@ -233,13 +98,89 @@ export async function POST(request: NextRequest) {
         problematicScore: analysis.problematic_score,
         tags: analysis.tags,
         summary: analysis.summary,
-      });
+    };
+}
+
+function formatVerseWithAnalysis(row: VerseWithAnalysisRow) {
+    return {
+        verse: {
+            id: row.id,
+            bookId: row.book_id,
+            bookTitle: row.book_title,
+            chapterNumber: row.chapter_number,
+            verseNumber: row.verse_number,
+            originalText: row.original_text,
+            translation: row.translation,
+            analyzed: row.analyzed,
+        },
+        analysis: row.analysis_id
+            ? {
+                id: row.analysis_id,
+                model: row.model,
+                generatedAt: row.generated_at,
+                modernEthics: row.modern_ethics,
+                genderAnalysis: row.gender_analysis,
+                casteAnalysis: row.caste_analysis,
+                contradictions: row.contradictions,
+                problematicScore: row.problematic_score,
+                tags: row.tags,
+                summary: row.summary,
+            }
+            : null,
+    };
+}
+
+function errorResponse(message: string, status: number) {
+    return NextResponse.json({error: message}, {status});
+}
+
+// ============================================================================
+// Query Builders
+// ============================================================================
+
+async function fetchVersesWithAnalyses(params: QueryParams): Promise<VerseWithAnalysisRow[]> {
+    const db = getPool();
+    const {bookId, chapterNumber} = params;
+
+    if (bookId && chapterNumber !== undefined) {
+        const query = loadQuery('fetch-verses-with-analyses-by-book-chapter');
+        const result = await db.query(query, [bookId, chapterNumber]);
+        return result.rows as VerseWithAnalysisRow[];
     }
 
-    // Load prompt and analyze
-    const systemPrompt = loadPrompt('analyze-verse');
+    if (bookId) {
+        const query = loadQuery('fetch-verses-with-analyses-by-book');
+        const result = await db.query(query, [bookId]);
+        return result.rows as VerseWithAnalysisRow[];
+    }
 
-    const userPrompt = `Book: ${verse.book_title}
+    const query = loadQuery('fetch-verses-with-analyses');
+    const result = await db.query(query);
+    return result.rows as VerseWithAnalysisRow[];
+}
+
+async function fetchVerse(bookId: string, chapterNumber: number, verseNumber: number): Promise<VerseRow | null> {
+    const db = getPool();
+    const query = loadQuery('fetch-verse-by-location');
+    const result = await db.query(query, [bookId, chapterNumber, verseNumber]);
+
+    return result.rows[0] as VerseRow ?? null;
+}
+
+async function fetchLatestAnalysis(verseId: string): Promise<AnalysisRow | null> {
+    const db = getPool();
+    const query = loadQuery('fetch-analysis-by-verse');
+    const result = await db.query(query, [verseId]);
+
+    return result.rows[0] as AnalysisRow ?? null;
+}
+
+// ============================================================================
+// LLM Analysis
+// ============================================================================
+
+function buildAnalysisPrompt(verse: VerseRow): string {
+    return `Book: ${verse.book_title}
 Chapter: ${verse.chapter_number}
 Verse: ${verse.verse_number}
 
@@ -250,48 +191,81 @@ Translation:
 ${verse.translation}
 
 Analyze this verse from a critical 2026 perspective.`;
+}
+
+async function generateAnalysis(verse: VerseRow): Promise<AnalysisResult> {
+    const systemPrompt = loadPrompt('analyze-verse');
+    const userPrompt = buildAnalysisPrompt(verse);
 
     const response = await complete(systemPrompt, userPrompt, {
-      temperature: 0.3,
-      maxTokens: 2000,
+        temperature: 0.3,
+        maxTokens: 2000,
     });
 
-    const analysisResult: AnalysisResult = extractJSON(response);
+    return extractJSON(response);
+}
 
-    // Store analysis
-    const analysis = await insertAnalysis({
-      verseId,
-      model: 'llama-3.3-70b-versatile',
-      modernEthics: analysisResult.modernEthics,
-      genderAnalysis: analysisResult.genderAnalysis,
-      casteAnalysis: analysisResult.casteAnalysis,
-      contradictions: analysisResult.contradictions,
-      problematicScore: analysisResult.problematicScore,
-      tags: analysisResult.tags,
-      summary: analysisResult.summary,
-    });
+// ============================================================================
+// Route Handlers
+// ============================================================================
 
-    await updateVerseAnalyzed(verseId);
+export async function GET(request: NextRequest) {
+    try {
+        const searchParams = request.nextUrl.searchParams;
+        const bookId = searchParams.get('bookId') ?? undefined;
+        const chapterNumberStr = searchParams.get('chapterNumber');
+        const chapterNumber = chapterNumberStr ? parseInt(chapterNumberStr, 10) : undefined;
 
-    return NextResponse.json({
-      id: analysis.id,
-      verseId: analysis.verse_id,
-      model: analysis.model,
-      generatedAt: analysis.generated_at,
-      modernEthics: analysis.modern_ethics,
-      genderAnalysis: analysis.gender_analysis,
-      casteAnalysis: analysis.caste_analysis,
-      contradictions: analysis.contradictions,
-      problematicScore: analysis.problematic_score,
-      tags: analysis.tags,
-      summary: analysis.summary,
-    });
+        const rows = await fetchVersesWithAnalyses({bookId, chapterNumber});
+        const verses = rows.map(formatVerseWithAnalysis);
 
-  } catch (error) {
-    console.error('Analysis error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Analysis failed' },
-      { status: 500 }
-    );
-  }
+        return NextResponse.json({verses});
+    } catch (error) {
+        console.error('Fetch analyses error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch analyses';
+        return errorResponse(message, 500);
+    }
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        const body: Partial<AnalyzeRequestBody> = await request.json();
+        const {bookId, chapterNumber, verseNumber} = body;
+
+        if (!bookId || chapterNumber === undefined || verseNumber === undefined) {
+            return errorResponse('bookId, chapterNumber, and verseNumber are required', 400);
+        }
+
+        const verse = await fetchVerse(bookId, chapterNumber, verseNumber);
+        if (!verse) {
+            return errorResponse('Verse not found', 404);
+        }
+
+        const existingAnalysis = await fetchLatestAnalysis(verse.id);
+        if (existingAnalysis) {
+            return NextResponse.json(formatAnalysisResponse(existingAnalysis));
+        }
+
+        const analysisResult = await generateAnalysis(verse);
+
+        const analysis = await insertAnalysis({
+            verseId: verse.id,
+            model: 'llama-3.3-70b-versatile',
+            modernEthics: analysisResult.modernEthics,
+            genderAnalysis: analysisResult.genderAnalysis,
+            casteAnalysis: analysisResult.casteAnalysis,
+            contradictions: analysisResult.contradictions,
+            problematicScore: analysisResult.problematicScore,
+            tags: analysisResult.tags,
+            summary: analysisResult.summary,
+        });
+
+        await updateVerseAnalyzed(verse.id);
+
+        return NextResponse.json(formatAnalysisResponse(analysis as AnalysisRow));
+    } catch (error) {
+        console.error('Analysis error:', error);
+        const message = error instanceof Error ? error.message : 'Analysis failed';
+        return errorResponse(message, 500);
+    }
 }

@@ -1,4 +1,4 @@
--- Fetch all verses with their analyses (no filters)
+-- Fetch verses with analyses filtered by book and chapter
 SELECT 
   v.id,
   v.book_id,
@@ -21,4 +21,5 @@ SELECT
 FROM verses v
 JOIN books b ON v.book_id = b.id
 LEFT JOIN analyses a ON v.id = a.verse_id
+WHERE v.book_id = $1 AND v.chapter_number = $2
 ORDER BY v.book_id, v.chapter_number, v.verse_number;
