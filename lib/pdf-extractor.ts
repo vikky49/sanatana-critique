@@ -8,7 +8,9 @@ export interface TextChunk {
 }
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const result = await extractText(buffer, { mergePages: true });
+  // Convert Buffer to Uint8Array for unpdf
+  const data = new Uint8Array(buffer);
+  const result = await extractText(data, { mergePages: true });
   return result.text;
 }
 
