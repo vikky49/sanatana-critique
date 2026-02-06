@@ -29,16 +29,27 @@ async function getDocumentText(documentId: string): Promise<string> {
     throw new Error('Document not found');
   }
 
+  console.log('Document file type:', document.fileType);
   const base64Data = document.rawTextUrl.split(',')[1];
   const buffer = Buffer.from(base64Data, 'base64');
+  console.log('Buffer size:', buffer.length);
   
   // Extract text from PDF if needed
   if (isPDF(document.fileType)) {
-    console.log('Extracting text from PDF...');
-    return await extractTextFromPDF(buffer);
+    console.log('Detected PDF, extracting text...');
+    try {
+      const text = await extractTextFromPDF(buffer);
+      console.log('Extracted text length:', text.length);
+      console.log('First 200 chars:', text.slice(0, 200));
+      return text;
+    } catch (error) {
+      console.error('PDF extraction failed:', error);
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
   
   // Otherwise treat as plain text
+  console.log('Not a PDF, treating as plain text');
   return buffer.toString('utf-8');
 }
 
