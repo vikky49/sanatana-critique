@@ -1,5 +1,13 @@
 import pdf from 'pdf-parse';
 
+type PDFData = {
+  text: string;
+  numpages: number;
+  info: any;
+  metadata: any;
+  version: string;
+};
+
 export interface TextChunk {
   text: string;
   page: number;
