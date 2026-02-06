@@ -58,34 +58,89 @@ export async function GET(request: NextRequest) {
       ? 'AND ' + conditions.join(' AND ')
       : '';
 
-    const query = `
-      SELECT 
-        v.id as verse_id,
-        v.book_id,
-        v.chapter_number,
-        v.verse_number,
-        v.original_text,
-        v.translation,
-        v.analyzed,
-        b.title as book_title,
-        a.id as analysis_id,
-        a.model,
-        a.generated_at,
-        a.modern_ethics,
-        a.gender_analysis,
-        a.caste_analysis,
-        a.contradictions,
-        a.problematic_score,
-        a.tags,
-        a.summary
-      FROM verses v
-      JOIN books b ON v.book_id = b.id
-      LEFT JOIN analyses a ON v.id = a.verse_id
-      WHERE 1=1 ${whereClause}
-      ORDER BY v.book_id, v.chapter_number, v.verse_number
-    `;
-
-    const result = await getSql()(query, params);
+    // Build query with filters using template literal
+    let result;
+    if (bookId && chapterNumber) {
+      result = await getSql()`
+        SELECT 
+          v.id as verse_id,
+          v.book_id,
+          v.chapter_number,
+          v.verse_number,
+          v.original_text,
+          v.translation,
+          v.analyzed,
+          b.title as book_title,
+          a.id as analysis_id,
+          a.model,
+          a.generated_at,
+          a.modern_ethics,
+          a.gender_analysis,
+          a.caste_analysis,
+          a.contradictions,
+          a.problematic_score,
+          a.tags,
+          a.summary
+        FROM verses v
+        JOIN books b ON v.book_id = b.id
+        LEFT JOIN analyses a ON v.id = a.verse_id
+        WHERE v.book_id = ${bookId} AND v.chapter_number = ${parseInt(chapterNumber)}
+        ORDER BY v.book_id, v.chapter_number, v.verse_number
+      `;
+    } else if (bookId) {
+      result = await getSql()`
+        SELECT 
+          v.id as verse_id,
+          v.book_id,
+          v.chapter_number,
+          v.verse_number,
+          v.original_text,
+          v.translation,
+          v.analyzed,
+          b.title as book_title,
+          a.id as analysis_id,
+          a.model,
+          a.generated_at,
+          a.modern_ethics,
+          a.gender_analysis,
+          a.caste_analysis,
+          a.contradictions,
+          a.problematic_score,
+          a.tags,
+          a.summary
+        FROM verses v
+        JOIN books b ON v.book_id = b.id
+        LEFT JOIN analyses a ON v.id = a.verse_id
+        WHERE v.book_id = ${bookId}
+        ORDER BY v.book_id, v.chapter_number, v.verse_number
+      `;
+    } else {
+      result = await getSql()`
+        SELECT 
+          v.id as verse_id,
+          v.book_id,
+          v.chapter_number,
+          v.verse_number,
+          v.original_text,
+          v.translation,
+          v.analyzed,
+          b.title as book_title,
+          a.id as analysis_id,
+          a.model,
+          a.generated_at,
+          a.modern_ethics,
+          a.gender_analysis,
+          a.caste_analysis,
+          a.contradictions,
+          a.problematic_score,
+          a.tags,
+          a.summary
+        FROM verses v
+        JOIN books b ON v.book_id = b.id
+        LEFT JOIN analyses a ON v.id = a.verse_id
+        ORDER BY v.book_id, v.chapter_number, v.verse_number
+      `;
+    }
 
     const verses = result.map((row: any) => ({
       verse: {
