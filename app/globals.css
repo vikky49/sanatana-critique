@@ -1,0 +1,546 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ==========================================================================
+   Button Component Styles
+   ========================================================================== */
+
+@layer components {
+  /* Base button class - shared styles for all buttons */
+  .btn {
+    @apply inline-flex 
+           items-center 
+           justify-center 
+           gap-2 
+           font-medium 
+           rounded-lg 
+           transition-colors 
+           focus:outline-none 
+           focus:ring-2 
+           focus:ring-offset-2 
+           disabled:opacity-50 
+           disabled:cursor-not-allowed;
+  }
+
+  /* Primary button - default foreground/background colors */
+  .btn-primary {
+    @apply bg-foreground 
+           text-background 
+           hover:bg-[#383838] 
+           dark:hover:bg-[#ccc] 
+           focus:ring-foreground;
+  }
+
+  /* Secondary button - subtle zinc background */
+  .btn-secondary {
+    @apply bg-zinc-100 
+           text-zinc-900 
+           hover:bg-zinc-200 
+           dark:bg-zinc-800 
+           dark:text-zinc-100 
+           dark:hover:bg-zinc-700 
+           focus:ring-zinc-500;
+  }
+
+  /* Outline button - transparent with border */
+  .btn-outline {
+    @apply border 
+           border-solid 
+           border-black/[.08] 
+           hover:border-transparent 
+           hover:bg-black/[.04] 
+           dark:border-white/[.145] 
+           dark:hover:bg-[#1a1a1a] 
+           focus:ring-zinc-500;
+  }
+
+  /* Size variants */
+  .btn-sm {
+    @apply h-9 px-3 text-sm;
+  }
+
+  .btn-md {
+    @apply h-12 px-5 text-base;
+  }
+
+  .btn-lg {
+    @apply h-14 px-6 text-lg;
+  }
+}
+
+/* ==========================================================================
+   Card Component Styles
+   ========================================================================== */
+
+@layer components {
+  .card {
+    @apply bg-white 
+           dark:bg-zinc-900 
+           rounded-lg 
+           border 
+           border-zinc-200 
+           dark:border-zinc-800 
+           shadow-sm;
+  }
+
+  .card-padding-none {
+    @apply p-0;
+  }
+
+  .card-padding-sm {
+    @apply p-4;
+  }
+
+  .card-padding-md {
+    @apply p-6;
+  }
+
+  .card-padding-lg {
+    @apply p-8;
+  }
+}
+
+/* ==========================================================================
+   Badge Component Styles
+   ========================================================================== */
+
+@layer components {
+  .badge {
+    @apply inline-flex 
+           items-center 
+           rounded-full 
+           font-medium;
+  }
+
+  /* Badge variants */
+  .badge-default {
+    @apply bg-zinc-100 
+           text-zinc-700 
+           dark:bg-zinc-800 
+           dark:text-zinc-300;
+  }
+
+  .badge-success {
+    @apply bg-green-100 
+           text-green-700 
+           dark:bg-green-900 
+           dark:text-green-300;
+  }
+
+  .badge-error {
+    @apply bg-red-100 
+           text-red-700 
+           dark:bg-red-900 
+           dark:text-red-300;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 
+           text-yellow-700 
+           dark:bg-yellow-900 
+           dark:text-yellow-300;
+  }
+
+  .badge-info {
+    @apply bg-blue-100 
+           text-blue-700 
+           dark:bg-blue-900 
+           dark:text-blue-300;
+  }
+
+  /* Badge sizes */
+  .badge-sm {
+    @apply px-2 py-0.5 text-xs;
+  }
+
+  .badge-md {
+    @apply px-3 py-1 text-sm;
+  }
+}
+
+/* ==========================================================================
+   Progress Component Styles
+   ========================================================================== */
+
+@layer components {
+  .progress-container {
+    @apply w-full;
+  }
+
+  .progress-header {
+    @apply flex 
+           justify-between 
+           items-center 
+           mb-2;
+  }
+
+  .progress-label {
+    @apply text-sm 
+           font-medium 
+           text-zinc-700 
+           dark:text-zinc-300;
+  }
+
+  .progress-percentage {
+    @apply text-sm 
+           text-zinc-600 
+           dark:text-zinc-400;
+  }
+
+  .progress {
+    @apply w-full 
+           bg-zinc-200 
+           dark:bg-zinc-700 
+           rounded-full 
+           overflow-hidden;
+  }
+
+  .progress-bar {
+    @apply bg-blue-600 
+           dark:bg-blue-500 
+           h-full 
+           transition-all 
+           duration-300 
+           ease-out;
+  }
+
+  .progress-sm {
+    @apply h-1;
+  }
+
+  .progress-md {
+    @apply h-2;
+  }
+
+  .progress-lg {
+    @apply h-3;
+  }
+}
+
+/* ==========================================================================
+   Spinner Component Styles
+   ========================================================================== */
+
+@layer components {
+  .spinner {
+    @apply border-4 
+           border-blue-500 
+           border-t-transparent 
+           rounded-full 
+           animate-spin;
+  }
+
+  .spinner-sm {
+    @apply w-4 h-4 border-2;
+  }
+
+  .spinner-md {
+    @apply w-8 h-8;
+  }
+
+  .spinner-lg {
+    @apply w-12 h-12;
+  }
+}
+
+/* ==========================================================================
+   Alert Component Styles
+   ========================================================================== */
+
+@layer components {
+  .alert {
+    @apply rounded-lg 
+           p-4 
+           border;
+  }
+
+  .alert-success {
+    @apply bg-green-50 
+           border-green-200 
+           text-green-800 
+           dark:bg-green-950 
+           dark:border-green-800 
+           dark:text-green-200;
+  }
+
+  .alert-error {
+    @apply bg-red-50 
+           border-red-200 
+           text-red-800 
+           dark:bg-red-950 
+           dark:border-red-800 
+           dark:text-red-200;
+  }
+
+  .alert-warning {
+    @apply bg-yellow-50 
+           border-yellow-200 
+           text-yellow-800 
+           dark:bg-yellow-950 
+           dark:border-yellow-800 
+           dark:text-yellow-200;
+  }
+
+  .alert-info {
+    @apply bg-blue-50 
+           border-blue-200 
+           text-blue-800 
+           dark:bg-blue-950 
+           dark:border-blue-800 
+           dark:text-blue-200;
+  }
+}
+
+/* ==========================================================================
+   Layout Component Styles
+   ========================================================================== */
+
+@layer components {
+  .container {
+    @apply w-full 
+           max-w-7xl 
+           mx-auto 
+           px-4 
+           sm:px-6 
+           lg:px-8;
+  }
+
+  .page-header {
+    @apply mb-8;
+  }
+
+  .page-title {
+    @apply text-3xl 
+           font-bold 
+           text-zinc-900 
+           dark:text-zinc-100;
+  }
+
+  .page-description {
+    @apply mt-2 
+           text-lg 
+           text-zinc-600 
+           dark:text-zinc-400;
+  }
+
+  .section {
+    @apply mb-8;
+  }
+}
+
+/* ==========================================================================
+   FileDropzone Component Styles
+   ========================================================================== */
+
+@layer components {
+  .dropzone {
+    @apply border-2 
+           border-dashed 
+           border-zinc-300 
+           dark:border-zinc-700 
+           rounded-lg 
+           p-12 
+           text-center 
+           cursor-pointer 
+           transition-colors;
+  }
+
+  .dropzone:hover:not(.dropzone-disabled) {
+    @apply border-blue-400;
+  }
+
+  .dropzone-active {
+    @apply border-blue-500 
+           bg-blue-50 
+           dark:bg-blue-950;
+  }
+
+  .dropzone-disabled {
+    @apply opacity-50 
+           cursor-not-allowed;
+  }
+
+  .dropzone-icon {
+    @apply w-12 
+           h-12 
+           text-zinc-400 
+           mx-auto 
+           mb-4;
+  }
+
+  .dropzone-content {
+    @apply flex 
+           flex-col 
+           gap-2;
+  }
+
+  .dropzone-title {
+    @apply text-lg 
+           font-medium 
+           text-zinc-900 
+           dark:text-zinc-100;
+  }
+
+  .dropzone-subtitle {
+    @apply text-sm 
+           text-zinc-600 
+           dark:text-zinc-400;
+  }
+
+  .dropzone-hint {
+    @apply text-xs 
+           text-zinc-500 
+           dark:text-zinc-500;
+  }
+}
+
+/* ==========================================================================
+   FilePreview Component Styles
+   ========================================================================== */
+
+@layer components {
+  .file-preview {
+    @apply flex 
+           items-center 
+           gap-3 
+           p-4 
+           bg-zinc-100 
+           dark:bg-zinc-800 
+           rounded-lg;
+  }
+
+  .file-preview-icon {
+    @apply w-5 
+           h-5 
+           text-zinc-600 
+           dark:text-zinc-400 
+           flex-shrink-0;
+  }
+
+  .file-preview-info {
+    @apply flex-1 
+           min-w-0;
+  }
+
+  .file-preview-name {
+    @apply text-sm 
+           font-medium 
+           text-zinc-900 
+           dark:text-zinc-100 
+           truncate;
+  }
+
+  .file-preview-size {
+    @apply text-xs 
+           text-zinc-600 
+           dark:text-zinc-400;
+  }
+
+  .file-preview-remove {
+    @apply p-1 
+           rounded 
+           hover:bg-zinc-200 
+           dark:hover:bg-zinc-700 
+           transition-colors;
+  }
+
+  .file-preview-remove-icon {
+    @apply w-4 
+           h-4 
+           text-zinc-500 
+           dark:text-zinc-400;
+  }
+}
+
+/* ==========================================================================
+   UploadArea Component Styles
+   ========================================================================== */
+
+@layer components {
+  .upload-area {
+    @apply w-full 
+           max-w-2xl 
+           mx-auto;
+  }
+
+  .upload-area-content {
+    @apply flex 
+           flex-col 
+           gap-4;
+  }
+
+  .upload-area-actions {
+    @apply flex 
+           gap-3 
+           justify-center;
+  }
+
+  .upload-area-status {
+    @apply flex 
+           flex-col 
+           items-center 
+           gap-4 
+           p-12;
+  }
+
+  .upload-area-status-text {
+    @apply text-lg 
+           font-medium 
+           text-zinc-700 
+           dark:text-zinc-300;
+  }
+
+  .upload-area-status-icon {
+    @apply w-12 
+           h-12;
+  }
+
+  .upload-area-status-success {
+    @apply text-green-500;
+  }
+
+  .upload-area-error {
+    @apply flex 
+           items-start 
+           gap-3;
+  }
+
+  .upload-area-error-icon {
+    @apply w-5 
+           h-5 
+           flex-shrink-0;
+  }
+
+  .upload-area-error-title {
+    @apply font-semibold;
+  }
+
+  .upload-area-error-message {
+    @apply text-sm 
+           mt-1;
+  }
+}
