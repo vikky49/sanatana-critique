@@ -96,3 +96,43 @@ export async function insertVerse(data: VerseInput): Promise<Verse> {
     analyzed: row.analyzed || false,
   };
 }
+
+interface AnalysisInput {
+  verseId: string;
+  model: string;
+  modernEthics: string;
+  genderAnalysis: string;
+  casteAnalysis: string;
+  contradictions: string;
+  problematicScore: number;
+  tags: string[];
+  summary: string;
+}
+
+export async function insertAnalysis(data: AnalysisInput) {
+  const result = await sql`
+    INSERT INTO analyses (
+      verse_id, model, generated_at,
+      modern_ethics, gender_analysis, caste_analysis,
+      contradictions, problematic_score, tags, summary
+    )
+    VALUES (
+      ${data.verseId}, ${data.model}, NOW(),
+      ${data.modernEthics}, ${data.genderAnalysis}, 
+      ${data.casteAnalysis}, ${data.contradictions},
+      ${data.problematicScore}, ${JSON.stringify(data.tags)}, 
+      ${data.summary}
+    )
+    RETURNING *
+  `;
+
+  return result[0];
+}
+
+export async function updateVerseAnalyzed(verseId: string) {
+  await sql`
+    UPDATE verses
+    SET analyzed = true
+    WHERE id = ${verseId}
+  `;
+}
