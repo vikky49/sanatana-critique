@@ -22,7 +22,7 @@ This is an **intelligent, scalable system** that leverages modern AI to:
 
 **Backend:**
 - Vercel Serverless Functions
-- PostgreSQL/Supabase (with pgvector for semantic search)
+- PostgreSQL/Neon (with pgvector for semantic search)
 - Background job processing
 
 **AI/ML:**
@@ -209,51 +209,37 @@ npm run dev
 **Monthly Operating (moderate traffic):**
 - User queries: ~$5-10
 - Hosting (Vercel): $0-20
-- Database (Supabase): $0-25
+- Database (Neon): $0-25
 - **Total: $5-55/month**
 
 ## Deployment
 
-### Step 1: Set Up Supabase Database
+### Step 1: Set Up Neon Database
 
-1. **Create Supabase Account:**
-   - Go to [supabase.com](https://supabase.com)
+1. **Create Neon Account:**
+   - Go to [neon.tech](https://neon.tech)
    - Sign up with GitHub
 
 2. **Create New Project:**
    - Click "New Project"
-   - Choose organization (or create one)
    - Set project name: `sanatana-critique`
-   - Set a strong database password (save it!)
    - Choose region closest to your users
-   - Click "Create new project" (takes ~2 minutes)
+   - Click "Create project"
 
 3. **Get Database Connection String:**
-   - Go to Project Settings → Database
-   - Find "Connection string" section
-   - Copy the "URI" format (starts with `postgresql://`)
-   - Replace `[YOUR-PASSWORD]` with your database password
-   - Example: `postgresql://postgres:[password]@db.xxx.supabase.co:5432/postgres`
+   - Go to Dashboard → Connection Details
+   - Copy the connection string (starts with `postgresql://`)
+   - Example: `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb`
 
 4. **Enable pgvector Extension:**
-   - Go to Database → Extensions
-   - Search for "vector"
-   - Enable `vector` extension (for semantic search)
+   - Run in SQL Editor: `CREATE EXTENSION IF NOT EXISTS vector;`
 
 5. **Run Database Migrations:**
    - Copy the SQL schema from `lib/db.ts`
-   - Go to SQL Editor in Supabase Dashboard
-   - Paste and run the schema
-   - Or use a migration tool:
+   - Run in Neon SQL Editor
+   - Or use the init script:
      ```bash
-     # Install Supabase CLI
-     brew install supabase/tap/supabase
-     
-     # Link your project
-     supabase link --project-ref YOUR_PROJECT_REF
-     
-     # Run migrations
-     npm run db:migrate
+     npm run db:init
      ```
 
 ### Step 2: Deploy to Vercel
@@ -283,11 +269,8 @@ npm run dev
      ```
      OPENAI_API_KEY=sk-...
      ANTHROPIC_API_KEY=sk-ant-...
-     DATABASE_URL=postgresql://postgres:[password]@db.xxx.supabase.co:5432/postgres
-     NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-     NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+     DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb
      ```
-   - Get Supabase keys from: Project Settings → API
 
 4. **Deploy:**
    - Click "Deploy"
@@ -324,8 +307,6 @@ npm run dev
    vercel env add OPENAI_API_KEY production
    vercel env add ANTHROPIC_API_KEY production
    vercel env add DATABASE_URL production
-   vercel env add NEXT_PUBLIC_SUPABASE_URL production
-   vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
    ```
 
 ### Step 3: Post-Deployment
@@ -333,7 +314,7 @@ npm run dev
 1. **Verify Database Connection:**
    - Check Vercel deployment logs
    - Test API endpoints
-   - Verify Supabase connection in Dashboard → Database → Connections
+   - Verify Neon connection in Dashboard → Connections
 
 2. **Custom Domain (Optional):**
    - Vercel Dashboard → Project → Settings → Domains
@@ -341,12 +322,8 @@ npm run dev
 
 3. **Monitor:**
    - **Vercel Logs:** Dashboard → Deployments → Runtime Logs
-   - **Supabase Logs:** Dashboard → Logs → API/Database
+   - **Neon Logs:** Dashboard → Monitoring
    - **Analytics:** Vercel Analytics tab
-
-4. **Set Up CORS (if needed):**
-   - Supabase Dashboard → Authentication → URL Configuration
-   - Add your Vercel domain to allowed URLs
 
 ### Troubleshooting
 
@@ -357,9 +334,9 @@ npm run dev
 
 **Database connection errors:**
 - Verify DATABASE_URL is correct
-- Check Supabase project is active (not paused)
+- Check Neon project is active
 - Ensure pgvector extension is enabled
-- Check firewall/connection pooling settings
+- Check connection pooling settings
 
 **API rate limits:**
 - Monitor OpenAI/Anthropic usage in their dashboards

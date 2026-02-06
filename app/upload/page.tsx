@@ -1,17 +1,20 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Container, PageHeader, Section } from '@/components/layout';
-import { Card } from '@/components/ui';
+import { Card, Button } from '@/components/ui';
 import UploadArea from '@/components/upload/UploadArea';
+import ProcessingStatus from '@/components/upload/ProcessingStatus';
 
 export default function UploadPage() {
-  const router = useRouter();
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
 
   const handleUploadComplete = (documentId: string) => {
-    console.log('Document uploaded:', documentId);
-    // TODO: Navigate to processing page when ready
-    // router.push(`/process/${documentId}`);
+    setUploadedDocumentId(documentId);
+  };
+
+  const handleReset = () => {
+    setUploadedDocumentId(null);
   };
 
   return (
@@ -22,9 +25,20 @@ export default function UploadPage() {
       />
       
       <Section>
-        <Card>
-          <UploadArea onUploadComplete={handleUploadComplete} />
-        </Card>
+        {!uploadedDocumentId ? (
+          <Card>
+            <UploadArea onUploadComplete={handleUploadComplete} />
+          </Card>
+        ) : (
+          <>
+            <ProcessingStatus documentId={uploadedDocumentId} />
+            <div className="mt-6 flex justify-center">
+              <Button variant="outline" size="md" onClick={handleReset}>
+                Upload Another Document
+              </Button>
+            </div>
+          </>
+        )}
       </Section>
     </Container>
   );

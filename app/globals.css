@@ -172,6 +172,41 @@ body {
            dark:text-blue-300;
   }
 
+  .badge-gray {
+    @apply bg-zinc-100 
+           text-zinc-700 
+           dark:bg-zinc-800 
+           dark:text-zinc-300;
+  }
+
+  .badge-blue {
+    @apply bg-blue-100 
+           text-blue-700 
+           dark:bg-blue-900 
+           dark:text-blue-300;
+  }
+
+  .badge-yellow {
+    @apply bg-yellow-100 
+           text-yellow-700 
+           dark:bg-yellow-900 
+           dark:text-yellow-300;
+  }
+
+  .badge-green {
+    @apply bg-green-100 
+           text-green-700 
+           dark:bg-green-900 
+           dark:text-green-300;
+  }
+
+  .badge-red {
+    @apply bg-red-100 
+           text-red-700 
+           dark:bg-red-900 
+           dark:text-red-300;
+  }
+
   /* Badge sizes */
   .badge-sm {
     @apply px-2 py-0.5 text-xs;
@@ -576,5 +611,180 @@ body {
     @apply text-zinc-600 
            dark:text-zinc-400 
            mb-4;
+  }
+}
+
+/* ==========================================================================
+   ProcessingStatus Component Styles
+   ========================================================================== */
+
+@layer components {
+  .processing-status {
+    @apply flex 
+           flex-col 
+           gap-4 
+           w-full 
+           max-w-2xl 
+           mx-auto;
+  }
+
+  .processing-status-header {
+    @apply flex 
+           items-center 
+           justify-between;
+  }
+
+  .processing-status-title {
+    @apply flex 
+           items-center 
+           gap-3;
+  }
+
+  .processing-status-title h3 {
+    @apply text-lg 
+           font-semibold 
+           text-zinc-900 
+           dark:text-zinc-100;
+  }
+
+  .processing-status-icon {
+    @apply w-6 h-6;
+  }
+
+  .processing-status-icon-blue {
+    @apply text-blue-500;
+  }
+
+  .processing-status-icon-yellow {
+    @apply text-yellow-500;
+  }
+
+  .processing-status-icon-green {
+    @apply text-green-500;
+  }
+
+  .processing-status-icon-red {
+    @apply text-red-500;
+  }
+
+  .processing-status-section {
+    @apply flex 
+           flex-col 
+           gap-3;
+  }
+
+  .processing-status-section-header {
+    @apply flex 
+           items-center 
+           gap-2;
+  }
+
+  .processing-status-section-header h4 {
+    @apply text-base 
+           font-medium 
+           text-zinc-900 
+           dark:text-zinc-100;
+  }
+
+  .processing-status-section-icon {
+    @apply w-5 
+           h-5 
+           text-zinc-500 
+           dark:text-zinc-400;
+  }
+
+  .processing-status-details {
+    @apply grid 
+           grid-cols-2 
+           gap-3;
+  }
+
+  .processing-status-detail {
+    @apply flex 
+           flex-col 
+           gap-0.5;
+  }
+
+  .processing-status-detail-label {
+    @apply text-xs 
+           text-zinc-500 
+           dark:text-zinc-400 
+           uppercase 
+           tracking-wide;
+  }
+
+  .processing-status-detail-value {
+    @apply text-sm 
+           font-medium 
+           text-zinc-900 
+           dark:text-zinc-100;
+  }
+
+  .processing-status-description {
+    @apply text-sm 
+           text-zinc-600 
+           dark:text-zinc-400 
+           mt-2;
+  }
+
+  .processing-status-chapters {
+    @apply flex 
+           flex-col 
+           gap-2 
+           max-h-48 
+           overflow-y-auto;
+  }
+
+  .processing-status-chapter {
+    @apply flex 
+           items-center 
+           gap-3 
+           p-2 
+           bg-zinc-50 
+           dark:bg-zinc-800 
+           rounded;
+  }
+
+  .processing-status-chapter-number {
+    @apply text-sm 
+           font-mono 
+           text-zinc-500 
+           dark:text-zinc-400 
+           w-12;
+  }
+
+  .processing-status-chapter-title {
+    @apply text-sm 
+           text-zinc-900 
+           dark:text-zinc-100 
+           flex-1 
+           truncate;
+  }
+
+  .processing-status-loading {
+    @apply flex 
+           flex-col 
+           items-center 
+           gap-4 
+           p-8;
+  }
+
+  .processing-status-loading p {
+    @apply text-zinc-600 
+           dark:text-zinc-400;
+  }
+
+  .processing-status-error {
+    @apply flex 
+           items-center 
+           gap-3 
+           text-red-600 
+           dark:text-red-400;
+  }
+
+  .processing-status-error-icon {
+    @apply w-5 
+           h-5 
+           flex-shrink-0;
   }
 }

@@ -1,6 +1,6 @@
 /**
  * Database layer - abstract interface for storage
- * Can be implemented with Postgres, Supabase, or other backends
+ * Can be implemented with Postgres or other backends
  */
 
 import type {
@@ -54,7 +54,7 @@ export interface Database {
 }
 
 /**
- * SQL Schema for PostgreSQL/Supabase
+ * SQL Schema for PostgreSQL
  */
 export const SQL_SCHEMA = `
 -- Documents table
