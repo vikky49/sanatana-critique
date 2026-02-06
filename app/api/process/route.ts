@@ -3,6 +3,7 @@ import { NeonDatabase } from '@/lib/neon-db';
 import { complete, extractJSON } from '@/lib/llm';
 import { loadPrompt } from '@/lib/prompts';
 import { insertBook, insertChapter, insertVerse } from '@/lib/db-operations';
+import { extractTextFromPDF, chunkText, isPDF } from '@/lib/pdf-extractor';
 
 const db = new NeonDatabase();
 
@@ -29,12 +30,45 @@ async function getDocumentText(documentId: string): Promise<string> {
   }
 
   const base64Data = document.rawTextUrl.split(',')[1];
-  return Buffer.from(base64Data, 'base64').toString('utf-8');
+  const buffer = Buffer.from(base64Data, 'base64');
+  
+  // Extract text from PDF if needed
+  if (isPDF(document.fileType)) {
+    console.log('Extracting text from PDF...');
+    return await extractTextFromPDF(buffer);
+  }
+  
+  // Otherwise treat as plain text
+  return buffer.toString('utf-8');
 }
 
 async function parseDocument(text: string): Promise<ParsedDocument> {
   const systemPrompt = loadPrompt('parse-document');
-  const userPrompt = `Parse this religious text:\n\n${text.slice(0, 30000)}`;
+  
+  // If text is too large, chunk it and parse in multiple requests
+  const maxChunkSize = 25000;
+  if (text.length > maxChunkSize) {
+    console.log(`Text is ${text.length} chars, chunking into smaller pieces...`);
+    const chunks = chunkText(text, maxChunkSize);
+    
+    // Parse first chunk to get structure
+    const firstChunk = chunks[0];
+    const userPrompt = `Parse this religious text (part 1 of ${chunks.length}):\n\n${firstChunk.text}`;
+    
+    const response = await complete(systemPrompt, userPrompt, {
+      maxTokens: 16000,
+    });
+    
+    const parsed = extractJSON<ParsedDocument>(response);
+    
+    // TODO: Parse remaining chunks and merge results
+    // For now, just return first chunk results
+    console.log(`Parsed first chunk. Found ${parsed.chapters.length} chapters.`);
+    return parsed;
+  }
+  
+  // Small text, parse in one go
+  const userPrompt = `Parse this religious text:\n\n${text}`;
 
   const response = await complete(systemPrompt, userPrompt, {
     maxTokens: 16000,
