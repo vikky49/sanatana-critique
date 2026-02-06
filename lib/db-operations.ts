@@ -1,5 +1,4 @@
 import {neon} from '@neondatabase/serverless';
-import {loadQuery} from './sql-loader';
 import type {Book, Chapter, Verse} from '@/types';
 
 let sql: ReturnType<typeof neon> | null = null;
