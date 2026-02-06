@@ -11,8 +11,10 @@
     "db:enable-vector": "tsx scripts/enable-vector.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.26",
     "@neondatabase/serverless": "^1.0.2",
     "@supabase/supabase-js": "^2.95.3",
+    "ai": "^6.0.75",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "react": "19.2.3",

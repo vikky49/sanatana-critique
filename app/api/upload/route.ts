@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { InMemoryDatabase } from '@/lib/db';
+import { NeonDatabase } from '@/lib/neon-db';
 
-const db = new InMemoryDatabase();
+const db = new NeonDatabase();
 
 export async function POST(request: NextRequest) {
   try {
