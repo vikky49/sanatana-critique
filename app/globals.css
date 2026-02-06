@@ -544,3 +544,37 @@ body {
            mt-1;
   }
 }
+
+/* ==========================================================================
+   Home Page Styles
+   ========================================================================== */
+
+@layer components {
+  .home-page {
+    @apply min-h-screen 
+           bg-zinc-50 
+           dark:bg-zinc-950 
+           py-12;
+  }
+
+  .home-grid {
+    @apply grid 
+           gap-6 
+           md:grid-cols-2 
+           lg:grid-cols-3;
+  }
+
+  .home-card-title {
+    @apply text-xl 
+           font-bold 
+           text-zinc-900 
+           dark:text-zinc-100 
+           mb-2;
+  }
+
+  .home-card-description {
+    @apply text-zinc-600 
+           dark:text-zinc-400 
+           mb-4;
+  }
+}
