@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle, XCircle, Upload } from 'lucide-react';
+import { upload } from '@vercel/blob/client';
+import { CheckCircle, XCircle, Upload as UploadIcon } from 'lucide-react';
 import FileDropzone from '../ui/FileDropzone';
 import FilePreview from '../ui/FilePreview';
-import Spinner from '../ui/Spinner';
 import Alert from '../ui/Alert';
 import { Button } from '../ui';
 
@@ -41,41 +41,37 @@ export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+      // Step 1: Upload directly to Vercel Blob (bypasses serverless function size limit)
+      const blob = await upload(
+        `documents/${Date.now()}-${selectedFile.name}`,
+        selectedFile,
+        {
+          access: 'public',
+          handleUploadUrl: '/api/blob/upload',
+          onUploadProgress: (progress) => {
+            setUploadProgress(Math.round(progress.percentage));
+          },
+        }
+      );
 
-      // Use XMLHttpRequest for upload progress tracking
-      const xhr = new XMLHttpRequest();
-      
-      const uploadPromise = new Promise<{ documentId: string }>((resolve, reject) => {
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            setUploadProgress(progress);
-          }
-        });
-
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              reject(new Error(errorData.message || 'Upload failed'));
-            } catch {
-              reject(new Error('Upload failed'));
-            }
-          }
-        });
-
-        xhr.addEventListener('error', () => reject(new Error('Network error')));
-        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+      // Step 2: Create document record in database
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blobUrl: blob.url,
+          filename: selectedFile.name,
+          fileType: selectedFile.type,
+          size: selectedFile.size,
+        }),
       });
 
-      xhr.open('POST', '/api/upload');
-      xhr.send(formData);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create document');
+      }
 
-      const data = await uploadPromise;
+      const data = await response.json();
       setState('success');
       setTimeout(() => onUploadComplete(data.documentId), 1000);
     } catch (err) {
@@ -119,7 +115,7 @@ export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
   const renderUploading = () => (
     <div className="upload-area-status">
       <div className="upload-progress-container">
-        <Upload className="upload-area-status-icon animate-pulse" />
+        <UploadIcon className="upload-area-status-icon animate-pulse" />
         <p className="upload-area-status-text">
           Uploading {selectedFile?.name}
         </p>

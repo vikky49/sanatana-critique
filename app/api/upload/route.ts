@@ -1,49 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
 import { NeonDatabase } from '@/lib/neon-db';
 
 const db = new NeonDatabase();
 
-const ALLOWED_TYPES = ['text/plain', 'application/pdf', 'application/json'];
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-
-const validateFile = (file: File): string | null => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-        return 'Invalid file type. Please upload PDF, TXT, or JSON files.';
-    }
-    if (file.size > MAX_FILE_SIZE) {
-        return 'File too large. Maximum size is 50MB.';
-    }
-    return null;
-};
-
 export async function POST(request: NextRequest) {
     try {
-        const formData = await request.formData();
-        const file = formData.get('file') as File;
+        const { blobUrl, filename, fileType, size } = await request.json();
 
-        if (!file) {
-            return NextResponse.json({ message: 'No file provided' }, { status: 400 });
+        if (!blobUrl || !filename) {
+            return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
         }
-
-        const validationError = validateFile(file);
-        if (validationError) {
-            return NextResponse.json({ message: validationError }, { status: 400 });
-        }
-
-        // Upload to Vercel Blob
-        const blob = await put(`documents/${Date.now()}-${file.name}`, file, {
-            access: 'public',
-            addRandomSuffix: true,
-        });
 
         // Create document record with blob URL
         const document = await db.createDocument({
-            filename: file.name,
-            fileType: file.type,
-            size: file.size,
+            filename,
+            fileType: fileType || 'application/octet-stream',
+            size: size || 0,
             status: 'uploaded',
-            rawTextUrl: blob.url,
+            rawTextUrl: blobUrl,
         });
 
         // Trigger processing asynchronously
