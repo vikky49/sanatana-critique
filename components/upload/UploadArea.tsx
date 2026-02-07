@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Upload } from 'lucide-react';
 import FileDropzone from '../ui/FileDropzone';
 import FilePreview from '../ui/FilePreview';
 import Spinner from '../ui/Spinner';
@@ -14,15 +14,23 @@ export interface UploadAreaProps {
   onUploadComplete: (documentId: string) => void;
 }
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
   const [state, setState] = useState<UploadState>('idle');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
     setState('idle');
     setError(null);
+    setUploadProgress(0);
   };
 
   const handleUpload = async () => {
@@ -30,24 +38,45 @@ export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
 
     setState('uploading');
     setError(null);
+    setUploadProgress(0);
 
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      // Use XMLHttpRequest for upload progress tracking
+      const xhr = new XMLHttpRequest();
+      
+      const uploadPromise = new Promise<{ documentId: string }>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(progress);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.message || 'Upload failed'));
+            } catch {
+              reject(new Error('Upload failed'));
+            }
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Upload failed');
-      }
+      xhr.open('POST', '/api/upload');
+      xhr.send(formData);
 
-      const data = await response.json();
+      const data = await uploadPromise;
       setState('success');
-      
       setTimeout(() => onUploadComplete(data.documentId), 1000);
     } catch (err) {
       setState('error');
@@ -59,6 +88,7 @@ export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
     setState('idle');
     setSelectedFile(null);
     setError(null);
+    setUploadProgress(0);
   };
 
   const renderDropzone = () => (
@@ -88,10 +118,21 @@ export default function UploadArea({ onUploadComplete }: UploadAreaProps) {
 
   const renderUploading = () => (
     <div className="upload-area-status">
-      <Spinner size="lg" />
-      <p className="upload-area-status-text">
-        Uploading {selectedFile?.name}...
-      </p>
+      <div className="upload-progress-container">
+        <Upload className="upload-area-status-icon animate-pulse" />
+        <p className="upload-area-status-text">
+          Uploading {selectedFile?.name}
+        </p>
+        <p className="upload-area-status-subtext">
+          {formatFileSize(selectedFile?.size ?? 0)} • {uploadProgress}%
+        </p>
+        <div className="upload-progress-bar">
+          <div 
+            className="upload-progress-fill" 
+            style={{ width: `${uploadProgress}%` }}
+          />
+        </div>
+      </div>
     </div>
   );
 

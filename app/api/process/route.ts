@@ -161,14 +161,26 @@ const storeChunkData = async (doc: ParsedDocument, ctx: ProcessingContext) => {
 // Document Extraction
 // =============================================================================
 
+const fetchDocumentBuffer = async (url: string): Promise<Buffer> => {
+    // Handle both blob URLs and legacy base64 data URLs
+    if (url.startsWith('data:')) {
+        const base64Data = url.split(',')[1];
+        return Buffer.from(base64Data, 'base64');
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch document: ${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+};
+
 const extractDocumentText = async (documentId: string, logger: ProcessingLogger): Promise<string> => {
     const document = await db.getDocument(documentId);
     if (!document?.rawTextUrl) throw new Error('Document not found');
 
-    const base64Data = document.rawTextUrl.split(',')[1];
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    await logger.info(`Document: ${document.fileType}, ${(buffer.length / 1024).toFixed(1)} KB`);
+    await logger.info(`Fetching document: ${document.fileType}`);
+    const buffer = await fetchDocumentBuffer(document.rawTextUrl);
+    await logger.info(`Document size: ${(buffer.length / 1024).toFixed(1)} KB`);
 
     if (isPDF(document.fileType)) {
         await logger.info('Extracting text from PDF...');
