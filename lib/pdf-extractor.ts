@@ -1,4 +1,4 @@
-import {extractText} from 'unpdf';
+import {extractText, getDocumentProxy} from 'unpdf';
 
 export interface TextChunk {
     text: string;
@@ -7,10 +7,45 @@ export interface TextChunk {
     endIndex: number;
 }
 
-export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-    // Convert Buffer to Uint8Array for unpdf
+export interface PDFExtractionProgress {
+    stage: 'loading' | 'parsing' | 'extracting' | 'complete';
+    message: string;
+    details?: Record<string, unknown>;
+}
+
+export type ProgressCallback = (progress: PDFExtractionProgress) => Promise<void>;
+
+export async function extractTextFromPDF(
+    buffer: Buffer,
+    onProgress?: ProgressCallback
+): Promise<string> {
+    const log = async (stage: PDFExtractionProgress['stage'], message: string, details?: Record<string, unknown>) => {
+        console.log(`[PDF] ${stage}: ${message}`, details || '');
+        if (onProgress) {
+            await onProgress({ stage, message, details });
+        }
+    };
+
+    await log('loading', 'Converting buffer to Uint8Array', { bufferSize: buffer.length });
     const data = new Uint8Array(buffer);
-    const result = await extractText(data, {mergePages: true});
+    
+    await log('parsing', 'Loading PDF document...');
+    const startParse = Date.now();
+    const pdf = await getDocumentProxy(data);
+    const parseTime = Date.now() - startParse;
+    await log('parsing', `PDF loaded: ${pdf.numPages} pages`, { numPages: pdf.numPages, parseTimeMs: parseTime });
+    
+    await log('extracting', `Extracting text from ${pdf.numPages} pages...`);
+    const startExtract = Date.now();
+    const result = await extractText(data, { mergePages: true });
+    const extractTime = Date.now() - startExtract;
+    
+    await log('complete', `Extraction complete: ${result.text.length} characters`, {
+        characters: result.text.length,
+        extractTimeMs: extractTime,
+        totalTimeMs: parseTime + extractTime,
+    });
+    
     return result.text;
 }
 

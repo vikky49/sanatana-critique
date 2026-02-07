@@ -6,6 +6,9 @@ import {insertBook, insertChapter, insertVerse} from '@/lib/db-operations';
 import {extractTextFromPDF, chunkText, isPDF} from '@/lib/pdf-extractor';
 import {createLogger, ProcessingLogger} from '@/lib/processing-logger';
 
+// Increase max duration for PDF processing (Pro plan supports up to 300s)
+export const maxDuration = 300;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -161,34 +164,77 @@ const storeChunkData = async (doc: ParsedDocument, ctx: ProcessingContext) => {
 // Document Extraction
 // =============================================================================
 
-const fetchDocumentBuffer = async (url: string): Promise<Buffer> => {
-    // Handle both blob URLs and legacy base64 data URLs
+const fetchDocumentBuffer = async (url: string, logger: ProcessingLogger): Promise<Buffer> => {
+    // Handle legacy base64 data URLs
     if (url.startsWith('data:')) {
+        await logger.info('Document stored as base64 data URL (legacy)');
         const base64Data = url.split(',')[1];
         return Buffer.from(base64Data, 'base64');
     }
 
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch document: ${response.status}`);
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    // Fetch from Vercel Blob URL
+    const isVercelBlob = url.includes('blob.vercel-storage.com') || url.includes('public.blob.vercel-storage.com');
+    await logger.info(`Fetching from ${isVercelBlob ? 'Vercel Blob' : 'external URL'}`, { 
+        urlPrefix: url.substring(0, 80),
+        isVercelBlob,
+    });
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': '*/*',
+            },
+        });
+
+        await logger.info(`Fetch response: ${response.status} ${response.statusText}`, {
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+            contentLength: response.headers.get('content-length'),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unable to read error body');
+            throw new Error(`Failed to fetch document: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        await logger.info(`ArrayBuffer received: ${arrayBuffer.byteLength} bytes`);
+        
+        return Buffer.from(arrayBuffer);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown fetch error';
+        await logger.error(`Fetch failed: ${msg}`);
+        throw error;
+    }
 };
 
 const extractDocumentText = async (documentId: string, logger: ProcessingLogger): Promise<string> => {
     const document = await db.getDocument(documentId);
     if (!document?.rawTextUrl) throw new Error('Document not found');
 
-    await logger.info(`Fetching document: ${document.fileType}`);
-    const buffer = await fetchDocumentBuffer(document.rawTextUrl);
-    await logger.info(`Document size: ${(buffer.length / 1024).toFixed(1)} KB`);
+    await logger.info(`Starting document extraction: ${document.fileType}`, { 
+        documentId,
+        fileType: document.fileType,
+        urlLength: document.rawTextUrl.length,
+    });
+    
+    const fetchStart = Date.now();
+    const buffer = await fetchDocumentBuffer(document.rawTextUrl, logger);
+    await logger.info(`Document fetched: ${(buffer.length / 1024).toFixed(1)} KB`, {
+        sizeKB: (buffer.length / 1024).toFixed(1),
+        fetchTimeMs: Date.now() - fetchStart,
+    });
 
     if (isPDF(document.fileType)) {
-        await logger.info('Extracting text from PDF...');
-        const text = await extractTextFromPDF(buffer);
-        await logger.info(`Extracted ${text.length} characters`);
+        await logger.info('Starting PDF text extraction...');
+        const text = await extractTextFromPDF(buffer, async (progress) => {
+            await logger.info(`PDF ${progress.stage}: ${progress.message}`, progress.details);
+        });
+        await logger.info(`PDF extraction complete: ${text.length} characters`);
         return text;
     }
 
+    await logger.info('Processing as plain text');
     return buffer.toString('utf-8');
 };
 

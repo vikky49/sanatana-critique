@@ -251,14 +251,23 @@ function formatMetadata(metadata: Record<string, unknown>): string {
     const entries = Object.entries(metadata)
         .map(([key, value]) => {
             if (typeof value === 'number') {
-                if (key === 'durationMs') return `${value}ms`;
-                if (key === 'promptLength' || key === 'responseLength') return `${value} chars`;
+                if (key.toLowerCase().includes('time') || key.toLowerCase().includes('ms')) return `${value}ms`;
+                if (key === 'promptLength' || key === 'responseLength' || key === 'characters') return `${value} chars`;
+                if (key === 'sizeKB') return `${value} KB`;
                 return `${key}=${value}`;
+            }
+            if (typeof value === 'string' && value.length > 50) {
+                return `${key}="${value.substring(0, 50)}..."`;
             }
             return `${key}=${JSON.stringify(value)}`;
         })
         .join(' ');
     return entries ? ` [${entries}]` : '';
+}
+
+function formatLogTime(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function ProcessingTerminal({logs, isProcessing}: {logs: LogEntry[]; isProcessing: boolean}) {
@@ -280,6 +289,7 @@ function ProcessingTerminal({logs, isProcessing}: {logs: LogEntry[]; isProcessin
                 )}
                 {logs.map((log) => (
                     <div key={log.id} className="processing-terminal-line">
+                        <span className="processing-terminal-time">{formatLogTime(log.createdAt)}</span>
                         <span className={`processing-terminal-prefix ${getLogLevelColor(log.level)}`}>
                             {getLogPrefix(log.level)}
                         </span>
