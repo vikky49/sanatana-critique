@@ -40,12 +40,19 @@ export class ProcessingLogger {
 
     private async writeLog(level: LogLevel, message: string, metadata?: Record<string, unknown>) {
         try {
+            const metadataJson = metadata ? JSON.stringify(metadata) : null;
             await getSql()`
                 INSERT INTO processing_logs (document_id, level, message, metadata)
-                VALUES (${this.documentId}, ${level}, ${message}, ${metadata ? JSON.stringify(metadata) : null})
+                VALUES (${this.documentId}::uuid, ${level}, ${message}, ${metadataJson}::jsonb)
             `;
         } catch (error) {
-            console.error('Failed to write processing log:', error);
+            // Log to console but don't throw - we don't want logging failures to break processing
+            console.error('Failed to write processing log:', {
+                error: error instanceof Error ? error.message : error,
+                documentId: this.documentId,
+                level,
+                message: message.substring(0, 100),
+            });
         }
     }
 
@@ -119,6 +126,25 @@ export class ProcessingLogger {
 
 export async function getLogsForDocument(documentId: string, limit = 100): Promise<ProcessingLog[]> {
     try {
+        // First check if table exists
+        const tableCheck = await getSql()`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'processing_logs'
+            ) as exists
+        ` as Array<{ exists: boolean }>;
+        
+        if (!tableCheck[0]?.exists) {
+            console.warn('processing_logs table does not exist');
+            return [{
+                id: 'system-warning',
+                documentId,
+                level: 'warn',
+                message: 'Processing logs table not found. Run db:init to create it.',
+                createdAt: new Date(),
+            }];
+        }
+
         const rows = await getSql()`
             SELECT id, document_id, level, message, metadata, created_at
             FROM processing_logs
@@ -126,6 +152,8 @@ export async function getLogsForDocument(documentId: string, limit = 100): Promi
             ORDER BY created_at ASC
             LIMIT ${limit}
         ` as LogRow[];
+
+        console.log(`Fetched ${rows.length} logs for document ${documentId}`);
 
         return rows.map(row => ({
             id: row.id,
@@ -137,7 +165,13 @@ export async function getLogsForDocument(documentId: string, limit = 100): Promi
         }));
     } catch (error) {
         console.error('Failed to fetch processing logs:', error);
-        return [];
+        return [{
+            id: 'system-error',
+            documentId,
+            level: 'error',
+            message: `Failed to fetch logs: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            createdAt: new Date(),
+        }];
     }
 }
 

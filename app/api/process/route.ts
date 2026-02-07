@@ -169,13 +169,16 @@ const fetchDocumentBuffer = async (url: string, logger: ProcessingLogger): Promi
     if (url.startsWith('data:')) {
         await logger.info('Document stored as base64 data URL (legacy)');
         const base64Data = url.split(',')[1];
-        return Buffer.from(base64Data, 'base64');
+        const buffer = Buffer.from(base64Data, 'base64');
+        await logger.debug(`Base64 decoded: ${buffer.length} bytes`);
+        return buffer;
     }
 
     // Fetch from Vercel Blob URL
     const isVercelBlob = url.includes('blob.vercel-storage.com') || url.includes('public.blob.vercel-storage.com');
     await logger.info(`Fetching from ${isVercelBlob ? 'Vercel Blob' : 'external URL'}`, { 
         urlPrefix: url.substring(0, 80),
+        fullUrl: url,
         isVercelBlob,
     });
 
@@ -190,6 +193,7 @@ const fetchDocumentBuffer = async (url: string, logger: ProcessingLogger): Promi
             status: response.status,
             contentType: response.headers.get('content-type'),
             contentLength: response.headers.get('content-length'),
+            headers: Object.fromEntries(response.headers.entries()),
         });
 
         if (!response.ok) {
@@ -198,7 +202,11 @@ const fetchDocumentBuffer = async (url: string, logger: ProcessingLogger): Promi
         }
 
         const arrayBuffer = await response.arrayBuffer();
-        await logger.info(`ArrayBuffer received: ${arrayBuffer.byteLength} bytes`);
+        await logger.info(`Blob data received`, {
+            byteLength: arrayBuffer.byteLength,
+            sizeKB: (arrayBuffer.byteLength / 1024).toFixed(2),
+            sizeMB: (arrayBuffer.byteLength / 1024 / 1024).toFixed(2),
+        });
         
         return Buffer.from(arrayBuffer);
     } catch (error) {
@@ -256,12 +264,42 @@ const parseWithLLM = async (
     const startTime = Date.now();
 
     try {
-        await logger.llmRequest(MODEL, userPrompt.length, {maxTokens: 16000});
+        await logger.llmRequest(MODEL, userPrompt.length, {
+            maxTokens: 16000,
+            chunkIndex,
+            totalChunks,
+            textPreview: text.substring(0, 500),
+            textLength: text.length,
+        });
+        await logger.debug(`LLM Input - System prompt length: ${systemPrompt.length}`, {
+            systemPromptPreview: systemPrompt.substring(0, 300),
+        });
+        await logger.debug(`LLM Input - User prompt preview`, {
+            userPromptPreview: userPrompt.substring(0, 1000),
+            userPromptLength: userPrompt.length,
+        });
+        
         const response = await complete(systemPrompt, userPrompt, {maxTokens: 16000});
+        
         await logger.llmResponse(MODEL, response.length, Date.now() - startTime);
+        await logger.debug(`LLM Output preview`, {
+            responsePreview: response.substring(0, 1000),
+            responseLength: response.length,
+        });
 
         const parsed = extractJSON<ParsedDocument>(response);
         await logger.parseResult(parsed.chapters.length, countVerses(parsed.chapters));
+        
+        if (parsed.chapters.length > 0) {
+            await logger.debug(`Parsed chapters summary`, {
+                chapters: parsed.chapters.map(ch => ({
+                    number: ch.number,
+                    title: ch.title,
+                    verseCount: ch.verses.length,
+                })),
+            });
+        }
+        
         return parsed;
     } catch (error) {
         const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -278,8 +316,20 @@ const parseChunks = async (
 ): Promise<ParsedDocument[]> => {
     const results: ParsedDocument[] = [];
 
+    await ctx.logger.info(`Starting chunk processing`, {
+        totalChunks: chunks.length,
+        chunkSizes: chunks.map((c, i) => ({ chunk: i + 1, chars: c.text.length })),
+        totalChars: chunks.reduce((sum, c) => sum + c.text.length, 0),
+    });
+
     for (let i = 0; i < chunks.length; i++) {
         await ctx.logger.chunkProcessing(i, chunks.length, chunks[i].text.length);
+        await ctx.logger.debug(`Chunk ${i + 1} content preview`, {
+            chunkIndex: i,
+            chunkLength: chunks[i].text.length,
+            startPreview: chunks[i].text.substring(0, 300),
+            endPreview: chunks[i].text.substring(chunks[i].text.length - 300),
+        });
 
         const parsed = await parseWithLLM(
             chunks[i].text,
@@ -292,6 +342,12 @@ const parseChunks = async (
         if (parsed) {
             await storeChunkData(parsed, ctx);
             results.push(parsed);
+            await ctx.logger.info(`Chunk ${i + 1} stored successfully`, {
+                chaptersInChunk: parsed.chapters.length,
+                versesInChunk: countVerses(parsed.chapters),
+            });
+        } else {
+            await ctx.logger.warn(`Chunk ${i + 1} returned no parsed data`);
         }
     }
 
