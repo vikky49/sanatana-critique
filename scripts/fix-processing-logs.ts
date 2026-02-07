@@ -9,14 +9,16 @@ async function fixProcessingLogsTable() {
     console.log('Checking processing_logs table columns...');
     
     // Check current columns
-    const cols = await sql`
+    const rows = (await sql`
         SELECT column_name FROM information_schema.columns 
         WHERE table_name = 'processing_logs'
-    `;
-    console.log('Current columns:', cols.map((c: { column_name: string }) => c.column_name));
+    `) as Array<{ column_name: string }>;
+
+    const colNames = rows.map((r) => r.column_name);
+    console.log('Current columns:', colNames);
     
-    const hasContext = cols.some((c: { column_name: string }) => c.column_name === 'context');
-    const hasMetadata = cols.some((c: { column_name: string }) => c.column_name === 'metadata');
+    const hasContext = colNames.includes('context');
+    const hasMetadata = colNames.includes('metadata');
     
     if (hasContext && !hasMetadata) {
         console.log('Renaming context -> metadata...');
