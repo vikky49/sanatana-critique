@@ -45,11 +45,23 @@ export async function complete(
     return result;
 }
 
+function sanitizeJSON(jsonStr: string): string {
+    // Fix invalid escape sequences that LLMs sometimes generate
+    // Valid JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+    // Replace invalid \x sequences and other bad escapes
+    return jsonStr
+        // Replace \x followed by hex digits with unicode escape
+        .replace(/\\x([0-9a-fA-F]{2})/g, '\\u00$1')
+        // Replace standalone backslashes before invalid characters
+        .replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+}
+
 export function extractJSON<T>(text: string): T {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
         throw new Error('No JSON found in response');
     }
 
-    return JSON.parse(jsonMatch[0]);
+    const sanitized = sanitizeJSON(jsonMatch[0]);
+    return JSON.parse(sanitized);
 }
