@@ -148,12 +148,23 @@ CREATE TABLE processing_jobs (
   estimated_time_remaining INTEGER
 );
 
+-- Processing Logs table
+CREATE TABLE processing_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  level TEXT NOT NULL,
+  message TEXT NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX idx_verses_book_chapter ON verses(book_id, chapter_number);
 CREATE INDEX idx_analyses_verse ON analyses(verse_id);
 CREATE INDEX idx_analyses_score ON analyses(problematic_score);
 CREATE INDEX idx_jobs_status ON processing_jobs(status);
 CREATE INDEX idx_books_created ON books(created_at DESC);
+CREATE INDEX idx_processing_logs_document ON processing_logs(document_id, created_at);
 
 -- Enable pgvector for semantic search
 CREATE EXTENSION IF NOT EXISTS vector;

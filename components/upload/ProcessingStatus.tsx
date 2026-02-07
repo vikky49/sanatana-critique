@@ -8,6 +8,14 @@ import {Card, Progress, Badge, Spinner} from '@/components/ui';
 // Types
 // =============================================================================
 
+interface LogEntry {
+    id: string;
+    level: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+    createdAt: string;
+}
+
 interface ProcessingStatusData {
     documentId: string;
     status: 'uploaded' | 'processing' | 'completed' | 'failed';
@@ -34,7 +42,7 @@ interface ProcessingStatusData {
         total: number;
         completed: number;
     };
-    logs?: string[];
+    logs: LogEntry[];
     error?: string;
 }
 
@@ -55,7 +63,6 @@ interface StatusConfig {
 // Constants
 // =============================================================================
 
-const STORAGE_KEY_PREFIX = 'processing-logs-';
 const POLLING_INTERVAL_MS = 2000;
 
 const STATUS_CONFIG: Record<StatusType, StatusConfig> = {
@@ -79,80 +86,12 @@ function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleString();
 }
 
-function getStorageKey(documentId: string): string {
-    return `${STORAGE_KEY_PREFIX}${documentId}`;
-}
-
-function loadLogsFromStorage(documentId: string): string[] {
-    if (typeof window === 'undefined') return [];
-    const stored = localStorage.getItem(getStorageKey(documentId));
-    return stored ? JSON.parse(stored) : [];
-}
-
-function saveLogsToStorage(documentId: string, logs: string[]): void {
-    if (logs.length > 0) {
-        localStorage.setItem(getStorageKey(documentId), JSON.stringify(logs));
-    }
-}
-
-// =============================================================================
-// Log Generation
-// =============================================================================
-
-function generateLogsFromStateChange(
-    current: ProcessingStatusData,
-    previous: ProcessingStatusData | null
-): string[] {
-    const logs: string[] = [];
-
-    if (!previous && current.document) {
-        logs.push(`Document uploaded: ${current.document.filename}`);
-    }
-
-    if (current.status === 'processing' && previous?.status !== 'processing') {
-        logs.push('Starting document processing...');
-    }
-
-    if (current.book && !previous?.book) {
-        logs.push(`Parsed book: "${current.book.title}"`);
-        logs.push(`Found ${current.book.totalChapters} chapters, ${current.book.totalVerses} verses`);
-    }
-
-    if (current.chapters.length > (previous?.chapters.length ?? 0)) {
-        const newChapters = current.chapters.slice(previous?.chapters.length ?? 0);
-        newChapters.forEach(ch => {
-            logs.push(`Processed Chapter ${ch.number}: ${ch.title} (${ch.verseCount} verses)`);
-        });
-    }
-
-    const prevCompleted = previous?.analyses.completed ?? 0;
-    if (current.analyses.completed > prevCompleted) {
-        const diff = current.analyses.completed - prevCompleted;
-        logs.push(`Analyzed ${diff} verse(s) (${current.analyses.completed}/${current.analyses.total} total)`);
-    }
-
-    if (current.status === 'completed' && previous?.status !== 'completed') {
-        logs.push('Processing complete!');
-    }
-
-    if (current.status === 'failed' && previous?.status !== 'failed') {
-        logs.push(`Error: ${current.error || 'Processing failed'}`);
-    }
-
-    if (current.logs) {
-        logs.push(...current.logs);
-    }
-
-    return logs;
-}
-
 // =============================================================================
 // Custom Hook: useProcessingStatus
 // =============================================================================
 
 interface UseProcessingStatusResult {
     data: ProcessingStatusData | null;
-    logs: string[];
     error: string | null;
     isPolling: boolean;
 }
@@ -164,36 +103,9 @@ function useProcessingStatus(
     const [data, setData] = useState<ProcessingStatusData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isPolling, setIsPolling] = useState(true);
-    const [logs, setLogs] = useState<string[]>(() => loadLogsFromStorage(documentId));
-
-    const prevDataRef = useRef<ProcessingStatusData | null>(null);
-    const isRestoredSession = useRef(
-        typeof window !== 'undefined' && localStorage.getItem(getStorageKey(documentId)) !== null
-    );
-
-    // Persist logs to localStorage
-    useEffect(() => {
-        saveLogsToStorage(documentId, logs);
-    }, [logs, documentId]);
 
     const handleStatusUpdate = useCallback((statusData: ProcessingStatusData) => {
         setData(statusData);
-
-        const prevData = prevDataRef.current;
-
-        // Skip log generation on first fetch if we restored from localStorage
-        if (!prevData && isRestoredSession.current) {
-            isRestoredSession.current = false;
-            prevDataRef.current = statusData;
-            return;
-        }
-
-        const newLogs = generateLogsFromStateChange(statusData, prevData);
-        if (newLogs.length > 0) {
-            setLogs(prev => [...prev, ...newLogs]);
-        }
-
-        prevDataRef.current = statusData;
 
         if (statusData.status === 'completed' || statusData.status === 'failed') {
             setIsPolling(false);
@@ -226,7 +138,7 @@ function useProcessingStatus(
         return () => clearInterval(intervalId);
     }, [fetchStatus, isPolling]);
 
-    return {data, logs, error, isPolling};
+    return {data, error, isPolling};
 }
 
 // =============================================================================
@@ -317,7 +229,39 @@ function AnalysisProgress({analyses}: {analyses: ProcessingStatusData['analyses'
     );
 }
 
-function ProcessingTerminal({logs, isProcessing}: {logs: string[]; isProcessing: boolean}) {
+function getLogLevelColor(level: string): string {
+    switch (level) {
+        case 'error': return 'text-red-400';
+        case 'warn': return 'text-yellow-400';
+        case 'debug': return 'text-zinc-500';
+        default: return 'text-zinc-300';
+    }
+}
+
+function getLogPrefix(level: string): string {
+    switch (level) {
+        case 'error': return '✗';
+        case 'warn': return '⚠';
+        case 'debug': return '…';
+        default: return '$';
+    }
+}
+
+function formatMetadata(metadata: Record<string, unknown>): string {
+    const entries = Object.entries(metadata)
+        .map(([key, value]) => {
+            if (typeof value === 'number') {
+                if (key === 'durationMs') return `${value}ms`;
+                if (key === 'promptLength' || key === 'responseLength') return `${value} chars`;
+                return `${key}=${value}`;
+            }
+            return `${key}=${JSON.stringify(value)}`;
+        })
+        .join(' ');
+    return entries ? ` [${entries}]` : '';
+}
+
+function ProcessingTerminal({logs, isProcessing}: {logs: LogEntry[]; isProcessing: boolean}) {
     const terminalRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -329,10 +273,24 @@ function ProcessingTerminal({logs, isProcessing}: {logs: string[]; isProcessing:
     return (
         <StatusSection icon={Terminal} title="Processing Log">
             <div ref={terminalRef} className="processing-terminal">
-                {logs.map((log, index) => (
-                    <div key={index} className="processing-terminal-line">
-                        <span className="processing-terminal-prefix">$</span>
-                        <span className="processing-terminal-text">{log}</span>
+                {logs.length === 0 && !isProcessing && (
+                    <div className="processing-terminal-line">
+                        <span className="processing-terminal-text text-zinc-500">No logs yet...</span>
+                    </div>
+                )}
+                {logs.map((log) => (
+                    <div key={log.id} className="processing-terminal-line">
+                        <span className={`processing-terminal-prefix ${getLogLevelColor(log.level)}`}>
+                            {getLogPrefix(log.level)}
+                        </span>
+                        <span className={`processing-terminal-text ${getLogLevelColor(log.level)}`}>
+                            {log.message}
+                            {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                <span className="text-zinc-500 text-xs ml-2">
+                                    {formatMetadata(log.metadata)}
+                                </span>
+                            )}
+                        </span>
                     </div>
                 ))}
                 {isProcessing && (
@@ -393,10 +351,12 @@ function LoadingDisplay() {
 // =============================================================================
 
 export default function ProcessingStatus({documentId, onComplete}: ProcessingStatusProps) {
-    const {data, logs, error} = useProcessingStatus(documentId, onComplete);
+    const {data, error} = useProcessingStatus(documentId, onComplete);
 
     if (error) return <ErrorDisplay message={error}/>;
     if (!data) return <LoadingDisplay/>;
+
+    const isProcessing = data.status === 'processing';
 
     return (
         <div className="processing-status">
@@ -405,7 +365,7 @@ export default function ProcessingStatus({documentId, onComplete}: ProcessingSta
             {data.book && <BookInfo book={data.book}/>}
             {data.chapters.length > 0 && <ChaptersList chapters={data.chapters}/>}
             {data.book && <AnalysisProgress analyses={data.analyses}/>}
-            {logs.length > 0 && <ProcessingTerminal logs={logs} isProcessing={data.status === 'processing'}/>}
+            <ProcessingTerminal logs={data.logs} isProcessing={isProcessing}/>
             {data.error && <ErrorDisplay message={data.error}/>}
         </div>
     );
