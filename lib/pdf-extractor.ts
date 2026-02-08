@@ -1,4 +1,5 @@
 import {extractText, getDocumentProxy} from 'unpdf';
+import { mapSeries, range } from '@/lib/functional';
 
 export interface TextChunk {
     text: string;
@@ -60,22 +61,23 @@ export async function extractTextFromPDF(
 
     await log('extracting', `Extracting text page-by-page for ${numPages} pages...`);
     const parts: string[] = [];
-    for (let i = 1; i <= numPages; i++) {
+    const pages = range(1, numPages);
+    await mapSeries(pages, async (i, idx) => {
         try {
             const page = await withTimeout((pdf as any).getPage(i), 30000, `getPage(${i})`);
-const tc = await withTimeout((page as any).getTextContent(), 30000, `getTextContent(${i})`);
-const items = (tc as any).items || [];
+            const tc = await withTimeout((page as any).getTextContent(), 30000, `getTextContent(${i})`);
+            const items = (tc as any).items || [];
             const pageText = items.map((it: any) => (it && it.str) ? it.str : '').join(' ');
             parts.push(pageText);
         } catch (err) {
             await log('extracting', `WARN: Failed to extract page ${i}`, { error: err instanceof Error ? err.message : String(err) });
-            // continue on error
         }
-        if (i % 10 === 0 || i === numPages) {
-            await log('extracting', `Extracted ${i}/${numPages} pages`, { extractedPages: i, totalPages: numPages });
+        const processed = idx + 1;
+        if (processed % 10 === 0 || i === numPages) {
+            await log('extracting', `Extracted ${processed}/${numPages} pages`, { extractedPages: processed, totalPages: numPages });
             await yieldTick();
         }
-    }
+    });
 
     const text = parts.join('\n\n');
     await log('complete', `Extraction complete: ${text.length} characters`, {

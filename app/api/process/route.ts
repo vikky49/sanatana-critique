@@ -4,6 +4,7 @@ import {complete, extractJSON} from '@/lib/llm';
 import {loadPrompt} from '@/lib/prompts';
 import {insertBook, insertChapter, insertVerse, insertAnalysis, updateVerseAnalyzed, getVersesByBookId} from '@/lib/db-operations';
 import {extractTextFromPDF, chunkText, isPDF} from '@/lib/pdf-extractor';
+import { mapSeries, forEachSeries } from '@/lib/functional';
 import {createLogger, ProcessingLogger} from '@/lib/processing-logger';
 
 export const runtime = 'nodejs';
@@ -94,7 +95,8 @@ const isDuplicateError = (error: unknown): boolean => {
 const db = new NeonDatabase();
 
 const createBook = async (documentId: string, logger: ProcessingLogger) => {
-    await logger.info('Creating book record');
+    logger.info('Creating book record');
+    console.debug(`[${documentId}] PRE-DB: insertBook()`);
     const book = await insertBook({
         documentId,
         title: 'Processing...',
@@ -103,7 +105,8 @@ const createBook = async (documentId: string, logger: ProcessingLogger) => {
         totalChapters: 0,
         totalVerses: 0,
     });
-    await logger.info(`Book created: ${book.id}`);
+    console.debug(`[${documentId}] POST-DB: insertBook → ${book.id}`);
+    logger.info(`Book created: ${book.id}`);
     return book;
 };
 
@@ -152,12 +155,12 @@ const storeVerse = async (verse: ParsedVerse, chapterNum: number, ctx: Processin
 };
 
 const storeChunkData = async (doc: ParsedDocument, ctx: ProcessingContext) => {
-    for (const chapter of doc.chapters) {
+    await forEachSeries(doc.chapters, async (chapter) => {
         await storeChapter(chapter, ctx);
-        for (const verse of chapter.verses) {
+        await forEachSeries(chapter.verses, async (verse) => {
             await storeVerse(verse, chapter.number, ctx);
-        }
-    }
+        });
+    });
 };
 
 // =============================================================================
@@ -323,17 +326,17 @@ const parseChunks = async (
         totalChars: chunks.reduce((sum, c) => sum + c.text.length, 0),
     });
 
-    for (let i = 0; i < chunks.length; i++) {
-        await ctx.logger.chunkProcessing(i, chunks.length, chunks[i].text.length);
+    await mapSeries(chunks, async (chunk, i) => {
+        await ctx.logger.chunkProcessing(i, chunks.length, chunk.text.length);
         await ctx.logger.debug(`Chunk ${i + 1} content preview`, {
             chunkIndex: i,
-            chunkLength: chunks[i].text.length,
-            startPreview: chunks[i].text.substring(0, 300),
-            endPreview: chunks[i].text.substring(chunks[i].text.length - 300),
+            chunkLength: chunk.text.length,
+            startPreview: chunk.text.substring(0, 300),
+            endPreview: chunk.text.substring(chunk.text.length - 300),
         });
 
         const parsed = await parseWithLLM(
-            chunks[i].text,
+            chunk.text,
             systemPrompt,
             ctx.logger,
             i,
@@ -350,7 +353,7 @@ const parseChunks = async (
         } else {
             await ctx.logger.warn(`Chunk ${i + 1} returned no parsed data`);
         }
-    }
+    });
 
     return results;
 };
