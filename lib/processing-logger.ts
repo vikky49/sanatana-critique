@@ -33,47 +33,47 @@ export class ProcessingLogger {
     private documentId: string;
     private buffer: Array<{level: LogLevel; message: string; metadata?: Record<string, unknown>}> = [];
     private flushTimeout: NodeJS.Timeout | null = null;
+    private enableDb: boolean;
 
     constructor(documentId: string) {
         this.documentId = documentId;
+        this.enableDb = process.env.LOG_TO_DB !== 'false';
     }
 
-    private async writeLog(level: LogLevel, message: string, metadata?: Record<string, unknown>) {
+    // Fire-and-forget DB logging (never blocks main flow)
+    private writeLog(level: LogLevel, message: string, metadata?: Record<string, unknown>) {
         try {
-            const metadataJson = metadata ? JSON.stringify(metadata) : null;
-            await getSql()`
+            if (!this.enableDb) return;
+            const p = getSql()`
                 INSERT INTO processing_logs (document_id, level, message, metadata)
-                VALUES (${this.documentId}::uuid, ${level}, ${message}, ${metadataJson}::jsonb)
-            `;
-        } catch (error) {
-            // Log to console but don't throw - we don't want logging failures to break processing
-            console.error('Failed to write processing log:', {
-                error: error instanceof Error ? error.message : error,
-                documentId: this.documentId,
-                level,
-                message: message.substring(0, 100),
+                VALUES (${this.documentId}, ${level}, ${message}, ${metadata ? JSON.stringify(metadata) : null})
+            ` as Promise<unknown>;
+            p.catch((error) => {
+                console.error('Failed to write processing log:', error);
             });
+        } catch (error) {
+            console.error('Failed to enqueue processing log:', error);
         }
     }
 
-    async info(message: string, metadata?: Record<string, unknown>) {
+    info(message: string, metadata?: Record<string, unknown>) {
         console.log(`[${this.documentId}] INFO: ${message}`, metadata || '');
-        await this.writeLog('info', message, metadata);
+        this.writeLog('info', message, metadata);
     }
 
-    async debug(message: string, metadata?: Record<string, unknown>) {
+    debug(message: string, metadata?: Record<string, unknown>) {
         console.log(`[${this.documentId}] DEBUG: ${message}`, metadata || '');
-        await this.writeLog('debug', message, metadata);
+        this.writeLog('debug', message, metadata);
     }
 
-    async warn(message: string, metadata?: Record<string, unknown>) {
+    warn(message: string, metadata?: Record<string, unknown>) {
         console.warn(`[${this.documentId}] WARN: ${message}`, metadata || '');
-        await this.writeLog('warn', message, metadata);
+        this.writeLog('warn', message, metadata);
     }
 
-    async error(message: string, metadata?: Record<string, unknown>) {
+    error(message: string, metadata?: Record<string, unknown>) {
         console.error(`[${this.documentId}] ERROR: ${message}`, metadata || '');
-        await this.writeLog('error', message, metadata);
+        this.writeLog('error', message, metadata);
     }
 
     async llmRequest(model: string, promptLength: number, options?: Record<string, unknown>) {
