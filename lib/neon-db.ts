@@ -84,7 +84,18 @@ export class NeonDatabase implements Database {
     }
 
     async updateBook(id: string, updates: Partial<Book>): Promise<void> {
-        throw new Error('Not implemented yet');
+        const { title, description, language, totalChapters, totalVerses } = updates;
+        await getSql()`
+            UPDATE books
+            SET 
+                title = ${title ?? null},
+                description = ${description ?? null},
+                language = ${language ?? null},
+                total_chapters = ${totalChapters ?? 0},
+                total_verses = ${totalVerses ?? 0},
+                processed_at = NOW()
+            WHERE id = ${id}
+        `;
     }
 
     async createChapter(chapter: Omit<Chapter, 'id'>): Promise<Chapter> {
