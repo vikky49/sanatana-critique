@@ -170,3 +170,13 @@ export async function updateVerseAnalyzed(verseId: string) {
         WHERE id = ${verseId}
     `;
 }
+
+export async function getVersesByBookId(bookId: string): Promise<VerseRow[]> {
+    const rows = await getSql()`
+        SELECT id, book_id, chapter_number, verse_number, original_text, translation, analyzed
+        FROM verses
+        WHERE book_id = ${bookId}
+        ORDER BY chapter_number, verse_number
+    ` as VerseRow[];
+    return rows;
+}

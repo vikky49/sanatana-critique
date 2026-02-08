@@ -2,7 +2,7 @@ import {NextRequest, NextResponse} from 'next/server';
 import {NeonDatabase} from '@/lib/neon-db';
 import {complete, extractJSON} from '@/lib/llm';
 import {loadPrompt} from '@/lib/prompts';
-import {insertBook, insertChapter, insertVerse} from '@/lib/db-operations';
+import {insertBook, insertChapter, insertVerse, insertAnalysis, updateVerseAnalyzed, getVersesByBookId} from '@/lib/db-operations';
 import {extractTextFromPDF, chunkText, isPDF} from '@/lib/pdf-extractor';
 import {createLogger, ProcessingLogger} from '@/lib/processing-logger';
 
@@ -247,11 +247,12 @@ const extractDocumentText = async (documentId: string, logger: ProcessingLogger)
 };
 
 // =============================================================================
-// LLM Parsing
+// LLM Parsing & Analysis
 // =============================================================================
 
 const MAX_CHUNK_SIZE = 25000;
 const MODEL = 'llama-3.3-70b-versatile';
+const ANALYSIS_CONCURRENCY = Number(process.env.ANALYSIS_CONCURRENCY || 2);
 
 const parseWithLLM = async (
     text: string,
@@ -374,8 +375,86 @@ const parseDocument = async (text: string, ctx: ProcessingContext): Promise<Pars
     const combined = combineResults(results);
 
     await ctx.logger.info(`Parsing complete: ${combined.chapters.length} chapters, ${countVerses(combined.chapters)} verses`);
-    return combined;
+return combined;
 };
+
+// ------------------------
+// Automatic analysis
+// ------------------------
+interface VerseRowForAnalysis {
+    id: string;
+    book_id: string;
+    chapter_number: number;
+    verse_number: number;
+    original_text: string;
+    translation: string;
+    analyzed: boolean;
+}
+
+const buildAnalysisPrompt = (bookTitle: string, verse: VerseRowForAnalysis): string => `Book: ${bookTitle}\nChapter: ${verse.chapter_number}\nVerse: ${verse.verse_number}\n\nOriginal Text:\n${verse.original_text}\n\nTranslation:\n${verse.translation}\n\nAnalyze this verse from a critical modern perspective (2026).`;
+
+const generateAnalysis = async (bookTitle: string, verse: VerseRowForAnalysis) => {
+    const systemPrompt = loadPrompt('analyze-verse');
+    const userPrompt = buildAnalysisPrompt(bookTitle, verse);
+    const response = await complete(systemPrompt, userPrompt, {temperature: 0.3, maxTokens: 2000});
+    return extractJSON<{
+        modernEthics: string;
+        genderAnalysis: string;
+        casteAnalysis: string;
+        contradictions: string;
+        problematicScore: number;
+        tags: string[];
+        summary: string;
+    }>(response);
+};
+
+async function runWithConcurrency<T>(items: T[], limit: number, work: (item: T, idx: number) => Promise<void>) {
+    let i = 0;
+    const workers = Array.from({length: Math.max(1, limit)}, () => (async () => {
+        while (true) {
+            const idx = i++;
+            if (idx >= items.length) break;
+            await work(items[idx], idx);
+        }
+    })());
+    await Promise.all(workers);
+}
+
+async function runAutomaticAnalysis(bookId: string, bookTitle: string, logger: ProcessingLogger) {
+    const verses = await getVersesByBookId(bookId) as VerseRowForAnalysis[];
+    const targets = verses.filter(v => !v.analyzed);
+    if (targets.length === 0) {
+        await logger.info('No unanalyzed verses found');
+        return;
+    }
+
+    await logger.info(`Starting automatic analysis for ${targets.length} verses`, {concurrency: ANALYSIS_CONCURRENCY});
+
+    await runWithConcurrency(targets, ANALYSIS_CONCURRENCY, async (v) => {
+        try {
+            await logger.analysisStart(v.id, v.chapter_number, v.verse_number);
+            const a = await generateAnalysis(bookTitle, v);
+            await insertAnalysis({
+                verseId: v.id,
+                model: MODEL,
+                modernEthics: a.modernEthics,
+                genderAnalysis: a.genderAnalysis,
+                casteAnalysis: a.casteAnalysis,
+                contradictions: a.contradictions,
+                problematicScore: a.problematicScore,
+                tags: a.tags,
+                summary: a.summary,
+            });
+            await updateVerseAnalyzed(v.id);
+            await logger.analysisComplete(v.id, a.problematicScore, a.tags);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            await logger.warn(`Analysis failed for verse ${v.chapter_number}:${v.verse_number}: ${msg}`);
+        }
+    });
+
+    await logger.info('Automatic analysis complete');
+}
 
 // =============================================================================
 // API Handler
@@ -402,7 +481,14 @@ export async function POST(request: NextRequest) {
 
         const text = await extractDocumentText(documentId, logger);
         const parsed = await parseDocument(text, ctx);
-        await updateBook(book.id, parsed, logger);
+await updateBook(book.id, parsed, logger);
+
+// Optional: automatic analysis after parsing
+try {
+    await runAutomaticAnalysis(book.id, parsed.title, logger);
+} catch (e) {
+    await logger.warn('Automatic analysis step failed', {error: e instanceof Error ? e.message : String(e)});
+}
 
         await logger.info('Processing complete', {
             bookId: book.id,
