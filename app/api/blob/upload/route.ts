@@ -1,6 +1,9 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const ALLOWED_TYPES = ['text/plain', 'application/pdf', 'application/json'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 

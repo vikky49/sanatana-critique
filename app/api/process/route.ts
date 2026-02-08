@@ -6,7 +6,7 @@ import {insertBook, insertChapter, insertVerse, insertAnalysis, updateVerseAnaly
 import {extractTextFromPDF, chunkText, isPDF} from '@/lib/pdf-extractor';
 import {createLogger, ProcessingLogger} from '@/lib/processing-logger';
 
-// Increase max duration for PDF processing (Pro plan supports up to 300s)
+export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 // =============================================================================

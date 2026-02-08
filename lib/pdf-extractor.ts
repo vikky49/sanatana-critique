@@ -37,16 +37,24 @@ export async function extractTextFromPDF(
     
     await log('extracting', `Extracting text from ${pdf.numPages} pages...`);
     const startExtract = Date.now();
-    const result = await extractText(data, { mergePages: true });
+    let resultText: string;
+    try {
+        const result = await extractText(data, { mergePages: true });
+        resultText = result.text;
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Surface a more actionable error
+        throw new Error(`unpdf extractText failed: ${msg}`);
+    }
     const extractTime = Date.now() - startExtract;
     
-    await log('complete', `Extraction complete: ${result.text.length} characters`, {
-        characters: result.text.length,
+    await log('complete', `Extraction complete: ${resultText.length} characters`, {
+        characters: resultText.length,
         extractTimeMs: extractTime,
         totalTimeMs: parseTime + extractTime,
     });
     
-    return result.text;
+    return resultText;
 }
 
 export function chunkText(text: string, maxChunkSize: number = 25000): TextChunk[] {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { NeonDatabase } from '@/lib/neon-db';
 
+export const runtime = 'nodejs';
+export const maxDuration = 120;
+
 const db = new NeonDatabase();
 
 export async function POST(request: NextRequest) {
