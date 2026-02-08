@@ -36,6 +36,17 @@ export default function HomePage() {
           </FeatureCard>
 
           <FeatureCard
+            title="Highlights"
+            description="See the top verses with highest problematic scores"
+          >
+            <Link href="/highlights">
+              <Button variant="secondary" size="md">
+                View Highlights
+              </Button>
+            </Link>
+          </FeatureCard>
+
+          <FeatureCard
             title="Search & Filter"
             description="Search verses by content, tags, or problematic score"
           >
