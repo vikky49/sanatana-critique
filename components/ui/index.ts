@@ -6,6 +6,7 @@ export type { CardProps } from './Card';
 
 export { default as Badge } from './Badge';
 export type { BadgeProps } from './Badge';
+export { DangerBadge, WarningBadge, SuccessBadge, InfoBadge, NeutralBadge } from './Badges';
 
 export { default as Progress } from './Progress';
 export type { ProgressProps } from './Progress';

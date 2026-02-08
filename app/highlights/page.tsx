@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import HighlightsList, { HighlightsItem } from '@/components/highlights/HighlightsList';
-import FilterBar from '@/components/highlights/FilterBar';
+import { HighlightsList, FilterBar, type HighlightsItem } from '@/components/highlights';
 import { PageHeader, Container, Section } from '@/components/layout';
 
 export default function HighlightsPage() {
