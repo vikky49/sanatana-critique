@@ -15,6 +15,15 @@ export interface PDFExtractionProgress {
 
 export type ProgressCallback = (progress: PDFExtractionProgress) => Promise<void>;
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+        p.then(v => { clearTimeout(t); resolve(v); }).catch(e => { clearTimeout(t); reject(e); });
+    });
+}
+
+async function yieldTick() { await new Promise(r => setTimeout(r, 0)); }
+
 export async function extractTextFromPDF(
     buffer: Buffer,
     onProgress?: ProgressCallback
@@ -28,33 +37,52 @@ export async function extractTextFromPDF(
 
     await log('loading', 'Converting buffer to Uint8Array', { bufferSize: buffer.length });
     const data = new Uint8Array(buffer);
-    
-    await log('parsing', 'Loading PDF document...');
-    const startParse = Date.now();
-    const pdf = await getDocumentProxy(data);
-    const parseTime = Date.now() - startParse;
-    await log('parsing', `PDF loaded: ${pdf.numPages} pages`, { numPages: pdf.numPages, parseTimeMs: parseTime });
-    
-    await log('extracting', `Extracting text from ${pdf.numPages} pages...`);
-    const startExtract = Date.now();
-    let resultText: string;
+
+    // Fast path first: merge all pages in one pass
     try {
-        const result = await extractText(data, { mergePages: true });
-        resultText = result.text;
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // Surface a more actionable error
-        throw new Error(`unpdf extractText failed: ${msg}`);
+        await log('extracting', 'Fast path: mergePages=true');
+        const fast = await withTimeout(extractText(data, { mergePages: true }), 60000, 'extractText (fast)');
+        await log('complete', `Extraction complete: ${fast.text.length} characters`, {
+            characters: fast.text.length,
+            path: 'fast',
+        });
+        return fast.text;
+    } catch (e) {
+        await log('extracting', `Fast path failed; trying page-by-page`, { error: e instanceof Error ? e.message : String(e) });
     }
-    const extractTime = Date.now() - startExtract;
-    
-    await log('complete', `Extraction complete: ${resultText.length} characters`, {
-        characters: resultText.length,
-        extractTimeMs: extractTime,
-        totalTimeMs: parseTime + extractTime,
+
+    // Slow path: page-by-page
+    await log('parsing', 'Loading PDF document...');
+    const parseStart = Date.now();
+    const pdf = await withTimeout(getDocumentProxy(data), 60000, 'getDocumentProxy');
+    const numPages = (pdf as any).numPages as number;
+    await log('parsing', `PDF loaded: ${numPages} pages`, { numPages, parseTimeMs: Date.now() - parseStart });
+
+    await log('extracting', `Extracting text page-by-page for ${numPages} pages...`);
+    const parts: string[] = [];
+    for (let i = 1; i <= numPages; i++) {
+        try {
+            const page = await withTimeout((pdf as any).getPage(i), 30000, `getPage(${i})`);
+const tc = await withTimeout((page as any).getTextContent(), 30000, `getTextContent(${i})`);
+const items = (tc as any).items || [];
+            const pageText = items.map((it: any) => (it && it.str) ? it.str : '').join(' ');
+            parts.push(pageText);
+        } catch (err) {
+            await log('extracting', `WARN: Failed to extract page ${i}`, { error: err instanceof Error ? err.message : String(err) });
+            // continue on error
+        }
+        if (i % 10 === 0 || i === numPages) {
+            await log('extracting', `Extracted ${i}/${numPages} pages`, { extractedPages: i, totalPages: numPages });
+            await yieldTick();
+        }
+    }
+
+    const text = parts.join('\n\n');
+    await log('complete', `Extraction complete: ${text.length} characters`, {
+        characters: text.length,
+        path: 'slow',
     });
-    
-    return resultText;
+    return text;
 }
 
 export function chunkText(text: string, maxChunkSize: number = 25000): TextChunk[] {
