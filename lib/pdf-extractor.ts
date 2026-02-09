@@ -38,24 +38,33 @@ export async function extractTextFromPDF(
 
     await log('loading', 'Converting buffer to Uint8Array', { bufferSize: buffer.length });
     const data = new Uint8Array(buffer);
+    await log('loading', 'Uint8Array created', { arrayLength: data.length });
 
-    // Fast path first: merge all pages in one pass
-    try {
-        await log('extracting', 'Fast path: mergePages=true');
-        const fast = await withTimeout(extractText(data, { mergePages: true }), 60000, 'extractText (fast)');
-        await log('complete', `Extraction complete: ${fast.text.length} characters`, {
-            characters: fast.text.length,
-            path: 'fast',
-        });
-        return fast.text;
-    } catch (e) {
-        await log('extracting', `Fast path failed; trying page-by-page`, { error: e instanceof Error ? e.message : String(e) });
+    const LARGE_FILE_THRESHOLD = 2 * 1024 * 1024; // 2MB
+    const isLargeFile = buffer.length > LARGE_FILE_THRESHOLD;
+
+    // Fast path: only for smaller files
+    if (!isLargeFile) {
+        try {
+            await log('extracting', 'Fast path: mergePages=true (small file)');
+            const fast = await withTimeout(extractText(data, { mergePages: true }), 60000, 'extractText (fast)');
+            await log('complete', `Extraction complete: ${fast.text.length} characters`, {
+                characters: fast.text.length,
+                path: 'fast',
+            });
+            return fast.text;
+        } catch (e) {
+            await log('extracting', `Fast path failed; trying page-by-page`, { error: e instanceof Error ? e.message : String(e) });
+        }
+    } else {
+        await log('extracting', 'Large file detected, using page-by-page extraction', { sizeBytes: buffer.length });
     }
 
-    // Slow path: page-by-page
-    await log('parsing', 'Loading PDF document...');
+    // Slow path: page-by-page (always used for large files)
+    await log('parsing', 'Loading PDF document via getDocumentProxy...');
     const parseStart = Date.now();
-    const pdf = await withTimeout(getDocumentProxy(data), 60000, 'getDocumentProxy');
+    await yieldTick(); // Allow event loop to process
+    const pdf = await withTimeout(getDocumentProxy(data), 120000, 'getDocumentProxy');
     const numPages = (pdf as any).numPages as number;
     await log('parsing', `PDF loaded: ${numPages} pages`, { numPages, parseTimeMs: Date.now() - parseStart });
 
