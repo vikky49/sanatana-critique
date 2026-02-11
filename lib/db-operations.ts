@@ -148,7 +148,16 @@ interface AnalysisInput {
     summary: string;
 }
 
+// Convert string[] to a Postgres text[] literal safely
+function toPgTextArray(tags: string[]): string {
+    const escaped = tags.map(t =>
+        '"' + t.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'
+    );
+    return `{${escaped.join(',')}}`;
+}
+
 export async function insertAnalysis(data: AnalysisInput) {
+    const tagsArray = toPgTextArray(data.tags || []);
     const result = await getSql()`
         INSERT INTO analyses (verse_id, model, generated_at,
                               modern_ethics, gender_analysis, caste_analysis,
@@ -156,7 +165,7 @@ export async function insertAnalysis(data: AnalysisInput) {
         VALUES (${data.verseId}, ${data.model}, NOW(),
                 ${data.modernEthics}, ${data.genderAnalysis},
                 ${data.casteAnalysis}, ${data.contradictions},
-                ${data.problematicScore}, ${JSON.stringify(data.tags)},
+                ${data.problematicScore}, ${tagsArray}::text[],
                 ${data.summary}) RETURNING *
     ` as AnalysisRow[];
 
