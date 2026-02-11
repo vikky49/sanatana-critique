@@ -9,6 +9,44 @@ function getGroqClient(): Groq {
     return groq;
 }
 
+async function openAIChatComplete(
+    systemPrompt: string,
+    userPrompt: string,
+    model: string,
+    temperature: number,
+    maxTokens: number
+): Promise<string> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY not set');
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+            ],
+            temperature,
+            max_tokens: maxTokens,
+        }),
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`OpenAI error ${resp.status}: ${text}`);
+    }
+
+    const data = await resp.json();
+    const result = data.choices?.[0]?.message?.content;
+    if (!result) throw new Error('No response from OpenAI');
+    return result as string;
+}
+
 interface CompletionOptions {
     model?: string;
     temperature?: number;
@@ -21,10 +59,15 @@ export async function complete(
     options: CompletionOptions = {}
 ): Promise<string> {
     const {
-        model = 'llama-3.3-70b-versatile',
+        model = process.env.ANALYSIS_MODEL || 'llama-3.3-70b-versatile',
         temperature = 0.3,
-        maxTokens = 8000,
+        maxTokens = 2000,
     } = options;
+
+    // Route by model family
+    if (model.startsWith('gpt')) {
+        return openAIChatComplete(systemPrompt, userPrompt, model, temperature, maxTokens);
+    }
 
     const client = getGroqClient();
     const completion = await client.chat.completions.create({

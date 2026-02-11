@@ -16,6 +16,12 @@ export interface AnalysisInfo {
   problematicScore: number;
   tags: string[];
   summary?: string;
+  modernEthics?: string;
+  genderAnalysis?: string;
+  casteAnalysis?: string;
+  contradictions?: string;
+  model?: string;
+  generatedAt?: string;
 }
 
 export interface VerseCardProps {
@@ -24,6 +30,7 @@ export interface VerseCardProps {
 }
 
 export default function VerseCard({ verse, analysis }: VerseCardProps) {
+  const [open, setOpen] = React.useState(false);
   return (
     <Card className="space-y-2">
       <div className="flex items-center justify-between">
@@ -41,6 +48,47 @@ export default function VerseCard({ verse, analysis }: VerseCardProps) {
 
       {analysis.summary && (
         <p className="text-sm">{analysis.summary}</p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <button
+          className="text-xs text-blue-600 underline"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? 'Hide details' : 'Show details'}
+        </button>
+        {analysis.model && (
+          <span className="text-[10px] text-gray-500">{analysis.model}</span>
+        )}
+      </div>
+
+      {open && (
+        <div className="space-y-2 text-sm">
+          {analysis.modernEthics && (
+            <div>
+              <h4 className="font-medium">Modern Ethics</h4>
+              <p className="text-gray-700 whitespace-pre-wrap">{analysis.modernEthics}</p>
+            </div>
+          )}
+          {analysis.genderAnalysis && (
+            <div>
+              <h4 className="font-medium">Gender</h4>
+              <p className="text-gray-700 whitespace-pre-wrap">{analysis.genderAnalysis}</p>
+            </div>
+          )}
+          {analysis.casteAnalysis && (
+            <div>
+              <h4 className="font-medium">Caste / Hierarchy</h4>
+              <p className="text-gray-700 whitespace-pre-wrap">{analysis.casteAnalysis}</p>
+            </div>
+          )}
+          {analysis.contradictions && (
+            <div>
+              <h4 className="font-medium">Contradictions</h4>
+              <p className="text-gray-700 whitespace-pre-wrap">{analysis.contradictions}</p>
+            </div>
+          )}
+        </div>
       )}
 
       {analysis.tags?.length ? (

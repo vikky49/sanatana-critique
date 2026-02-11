@@ -59,10 +59,12 @@ function buildPrompt(v: VerseRow) {
   return `Book: ${v.book_title}\nChapter: ${v.chapter_number}\nVerse: ${v.verse_number}\n\nOriginal Text:\n${v.original_text}\n\nTranslation:\n${v.translation}\n\nAnalyze this verse from a critical 2026 perspective.`;
 }
 
+const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || 'gpt-4.1';
+
 async function analyze(v: VerseRow) {
   const system = loadPrompt('analyze-verse');
   const user = buildPrompt(v);
-  const resp = await complete(system, user, { temperature: 0.3, maxTokens: 2000 });
+  const resp = await complete(system, user, { model: ANALYSIS_MODEL, temperature: 0.3, maxTokens: 3000 });
   return extractJSON<AnalysisResult>(resp);
 }
 
@@ -96,7 +98,7 @@ export async function POST(request: NextRequest) {
             const a = await analyze(v);
             await insertAnalysis({
               verseId: v.id,
-              model: 'llama-3.3-70b-versatile',
+          model: ANALYSIS_MODEL,
               modernEthics: a.modernEthics,
               genderAnalysis: a.genderAnalysis,
               casteAnalysis: a.casteAnalysis,

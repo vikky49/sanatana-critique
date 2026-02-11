@@ -193,13 +193,16 @@ ${verse.translation}
 Analyze this verse from a critical 2026 perspective.`;
 }
 
+const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || 'gpt-4.1';
+
 async function generateAnalysis(verse: VerseRow): Promise<AnalysisResult> {
     const systemPrompt = loadPrompt('analyze-verse');
     const userPrompt = buildAnalysisPrompt(verse);
 
     const response = await complete(systemPrompt, userPrompt, {
+        model: ANALYSIS_MODEL,
         temperature: 0.3,
-        maxTokens: 2000,
+        maxTokens: 3000,
     });
 
     return extractJSON(response);
@@ -250,7 +253,7 @@ export async function POST(request: NextRequest) {
 
         const analysis = await insertAnalysis({
             verseId: verse.id,
-            model: 'llama-3.3-70b-versatile',
+            model: ANALYSIS_MODEL,
             modernEthics: analysisResult.modernEthics,
             genderAnalysis: analysisResult.genderAnalysis,
             casteAnalysis: analysisResult.casteAnalysis,
