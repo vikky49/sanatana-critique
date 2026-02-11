@@ -656,8 +656,9 @@ body {
            flex-col 
            gap-4 
            w-full 
-           max-w-2xl 
-           mx-auto;
+           max-w-6xl 
+           mx-auto 
+           px-4;
   }
 
   .processing-status-header {
@@ -825,13 +826,15 @@ body {
     @apply bg-zinc-900 
            dark:bg-black 
            rounded-lg 
-           p-4 
+           p-6 
            font-mono 
-           text-xs 
-           max-h-96 
+           text-sm 
+           min-h-[500px] 
+           max-h-[600px] 
            overflow-y-auto 
            border 
-           border-zinc-700;
+           border-zinc-700 
+           shadow-2xl;
   }
 
   .processing-terminal-time {
@@ -843,8 +846,9 @@ body {
 
   .processing-terminal-line {
     @apply flex 
-           gap-2 
-           py-0.5;
+           gap-3 
+           py-1 
+           leading-relaxed;
   }
 
   .processing-terminal-prefix {
@@ -853,7 +857,10 @@ body {
   }
 
   .processing-terminal-text {
-    @apply text-zinc-300;
+    @apply text-zinc-300 
+           flex-1 
+           whitespace-pre-wrap 
+           break-words;
   }
 
   .processing-terminal-cursor {
