@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 import { Pool } from '@neondatabase/serverless';
 import { complete, extractJSON } from '@/lib/llm';
 import { loadPrompt } from '@/lib/prompts';
@@ -31,11 +34,14 @@ function getPool(): Pool {
   return pool;
 }
 
-async function fetchUnanalyzed(bookId?: string): Promise<VerseRow[]> {
+async function fetchUnanalyzed(
+  bookId?: string,
+  limit: number = 10
+): Promise<VerseRow[]> {
   const db = getPool();
   const where = bookId ? 'WHERE v.book_id = $1 AND v.analyzed = false'
                        : 'WHERE v.analyzed = false';
-  const params = bookId ? [bookId] : [];
+  const params = bookId ? [bookId, limit] : [limit];
   const sql = `
     SELECT v.id, v.book_id, v.chapter_number, v.verse_number,
            v.original_text, v.translation, v.analyzed, b.title AS book_title
@@ -43,7 +49,7 @@ async function fetchUnanalyzed(bookId?: string): Promise<VerseRow[]> {
     JOIN books b ON v.book_id = b.id
     ${where}
     ORDER BY v.chapter_number, v.verse_number
-    LIMIT 200
+    LIMIT $${bookId ? 2 : 1}
   `;
   const res = await db.query<VerseRow>(sql, params as any);
   return res.rows;
@@ -64,35 +70,64 @@ export async function POST(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
     const bookId = sp.get('bookId') ?? undefined;
+    const limitStr = sp.get('limit');
+    const loopStr = sp.get('loop');
+    const concurrencyStr = sp.get('concurrency');
 
-    const items = await fetchUnanalyzed(bookId);
-    if (items.length === 0) {
-      return NextResponse.json({ ok: true, analyzed: 0 });
-    }
+    const limit = Math.min(Math.max(parseInt(limitStr || '10', 10), 1), 25);
+    const loop = loopStr === 'true' || loopStr === '1';
+    const concurrency = Math.min(Math.max(parseInt(concurrencyStr || '2', 10), 1), 4);
 
     let analyzed = 0;
-    for (const v of items) {
-      try {
-        const a = await analyze(v);
-        await insertAnalysis({
-          verseId: v.id,
-          model: 'llama-3.3-70b-versatile',
-          modernEthics: a.modernEthics,
-          genderAnalysis: a.genderAnalysis,
-          casteAnalysis: a.casteAnalysis,
-          contradictions: a.contradictions,
-          problematicScore: a.problematicScore,
-          tags: a.tags,
-          summary: a.summary,
-        });
-        await updateVerseAnalyzed(v.id);
-        analyzed++;
-      } catch (e) {
-        // continue with next verse
-      }
+    let batches = 0;
+    const deadline = Date.now() + 240_000; // ~4 minutes safety budget
+
+    const runBatch = async () => {
+      const items = await fetchUnanalyzed(bookId, limit);
+      if (items.length === 0) return 0;
+
+      // Simple concurrency control
+      let idx = 0;
+      const worker = async () => {
+        while (idx < items.length) {
+          const i = idx++;
+          const v = items[i];
+          try {
+            const a = await analyze(v);
+            await insertAnalysis({
+              verseId: v.id,
+              model: 'llama-3.3-70b-versatile',
+              modernEthics: a.modernEthics,
+              genderAnalysis: a.genderAnalysis,
+              casteAnalysis: a.casteAnalysis,
+              contradictions: a.contradictions,
+              problematicScore: a.problematicScore,
+              tags: a.tags,
+              summary: a.summary,
+            });
+            await updateVerseAnalyzed(v.id);
+            analyzed++;
+          } catch (_) {
+            // skip failures; continue
+          }
+        }
+      };
+
+      const workers = Array.from({ length: concurrency }, () => worker());
+      await Promise.all(workers);
+      batches++;
+      return items.length;
+    };
+
+    // Always run at least one batch
+    let processed = await runBatch();
+
+    // If loop requested, keep going while within time budget
+    while (loop && processed > 0 && Date.now() < deadline) {
+      processed = await runBatch();
     }
 
-    return NextResponse.json({ ok: true, analyzed });
+    return NextResponse.json({ ok: true, analyzed, batches, looped: loop });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to analyze missing';
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -21,6 +21,8 @@ export default function HighlightsPage() {
     return p.toString();
   }, [minScore, limit, tags]);
 
+  const [reanalyzing, setReanalyzing] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -54,6 +56,18 @@ export default function HighlightsPage() {
             if (n.tags !== undefined) setTags(n.tags);
           }}
           onRefresh={() => setRefreshKey(k => k + 1)}
+          onReanalyze={async () => {
+            try {
+              setReanalyzing(true);
+              await fetch('/api/analyze/missing?limit=10&loop=true&concurrency=2', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+              setRefreshKey(k => k + 1);
+            } finally {
+              setReanalyzing(false);
+            }
+          }}
         />
       </Section>
 

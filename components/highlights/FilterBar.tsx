@@ -6,11 +6,21 @@ export interface FilterBarProps {
   minScore: number;
   limit: number;
   tags: string;
-  onChange: (next: { minScore?: number; limit?: number; tags?: string }) => void;
+  onChange: (
+    next: { minScore?: number; limit?: number; tags?: string }
+  ) => void;
   onRefresh: () => void;
+  onReanalyze?: () => Promise<void> | void;
 }
 
-export default function FilterBar({ minScore, limit, tags, onChange, onRefresh }: FilterBarProps) {
+export default function FilterBar({
+  minScore,
+  limit,
+  tags,
+  onChange,
+  onRefresh,
+  onReanalyze,
+}: FilterBarProps) {
   return (
     <div className="flex items-end gap-4">
       <div>
@@ -45,7 +55,18 @@ export default function FilterBar({ minScore, limit, tags, onChange, onRefresh }
           className="input w-full"
         />
       </div>
-      <Button variant="secondary" size="md" onClick={onRefresh}>Refresh</Button>
+      <Button variant="secondary" size="md" onClick={onRefresh}>
+        Refresh
+      </Button>
+      {onReanalyze && (
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => void onReanalyze()}
+        >
+          Re-analyze Missing
+        </Button>
+      )}
     </div>
   );
 }
