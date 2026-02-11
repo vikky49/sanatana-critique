@@ -8,7 +8,7 @@ export default function HighlightsPage() {
   const [items, setItems] = useState<HighlightsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [minScore, setMinScore] = useState(70);
+  const [minScore, setMinScore] = useState(0);
   const [limit, setLimit] = useState(20);
   const [tags, setTags] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -38,7 +38,10 @@ export default function HighlightsPage() {
 
   return (
     <Container>
-      <PageHeader title="Highlights" description="Top verses with highest problematic scores" />
+      <PageHeader 
+        title="Top 20 Most Irrelevant Verses for 2026" 
+        description="Verses that conflict most with modern ethical standards and 2026 values" 
+      />
 
       <Section>
         <FilterBar

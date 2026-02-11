@@ -36,12 +36,12 @@ export default function HomePage() {
           </FeatureCard>
 
           <FeatureCard
-            title="Highlights"
-            description="See the top verses with highest problematic scores"
+            title="Top 20 Most Irrelevant for 2026"
+            description="See verses that conflict most with modern ethical standards and 2026 values"
           >
             <Link href="/highlights">
               <Button variant="secondary" size="md">
-                View Highlights
+                View Top 20
               </Button>
             </Link>
           </FeatureCard>
