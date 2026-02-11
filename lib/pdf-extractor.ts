@@ -96,25 +96,78 @@ export async function extractTextFromPDF(
     return text;
 }
 
-export function chunkText(text: string, maxChunkSize: number = 25000): TextChunk[] {
-    const chunks: TextChunk[] = [];
-    let startIndex = 0;
+// Helper: Find optimal break point near target index
+const findBreakPoint = (
+    text: string,
+    targetEnd: number,
+    startIndex: number
+): number => {
+    if (targetEnd >= text.length) return text.length;
+    
+    const searchStart = Math.max(targetEnd - 500, startIndex);
+    const searchRegion = text.slice(searchStart, targetEnd);
+    
+    // Try paragraph break first
+    const lastParaBreak = searchRegion.lastIndexOf('\n\n');
+    if (lastParaBreak > 0) {
+        return searchStart + lastParaBreak + 2;
+    }
+    
+    // Fall back to sentence break
+    const lastPeriod = searchRegion.lastIndexOf('. ');
+    if (lastPeriod > 0) {
+        return searchStart + lastPeriod + 2;
+    }
+    
+    return targetEnd;
+};
 
-    while (startIndex < text.length) {
-        const endIndex = Math.min(startIndex + maxChunkSize, text.length);
-        const chunkText = text.slice(startIndex, endIndex);
+// Helper: Generate chunk boundaries as array of [start, end] pairs
+// Uses functional/recursive approach instead of loops
+const generateChunkBoundaries = (
+    textLength: number,
+    maxChunkSize: number,
+    text: string
+): Array<[number, number]> => {
+    const buildBoundaries = (
+        start: number,
+        acc: Array<[number, number]>
+    ): Array<[number, number]> => {
+        if (start >= textLength) return acc;
+        
+        const targetEnd = Math.min(start + maxChunkSize, textLength);
+        const actualEnd = findBreakPoint(text, targetEnd, start);
+        
+        // Safety: prevent infinite recursion
+        if (actualEnd <= start) return acc;
+        
+        return buildBoundaries(
+            actualEnd,
+            [...acc, [start, actualEnd]]
+        );
+    };
+    
+    return buildBoundaries(0, []);
+};
 
-        chunks.push({
-            text: chunkText,
-            page: 0, // We'll track this later if needed
+export function chunkText(
+    text: string,
+    maxChunkSize: number = 12000
+): TextChunk[] {
+    const boundaries = generateChunkBoundaries(
+        text.length,
+        maxChunkSize,
+        text
+    );
+    
+    return boundaries
+        .map(([startIndex, endIndex]) => ({
+            text: text.slice(startIndex, endIndex).trim(),
+            page: 0,
             startIndex,
             endIndex,
-        });
-
-        startIndex = endIndex;
-    }
-
-    return chunks;
+        }))
+        .filter(chunk => chunk.text.length > 0);
 }
 
 export function isPDF(mimeType: string): boolean {

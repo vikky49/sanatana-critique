@@ -253,19 +253,49 @@ const extractDocumentText = async (documentId: string, logger: ProcessingLogger)
 // LLM Parsing & Analysis
 // =============================================================================
 
-const MAX_CHUNK_SIZE = 25000;
+// Reduced from 25000 to prevent timeouts
+const MAX_CHUNK_SIZE = 12000;
 const MODEL = 'llama-3.3-70b-versatile';
-const ANALYSIS_CONCURRENCY = Number(process.env.ANALYSIS_CONCURRENCY || 2);
+const ANALYSIS_CONCURRENCY = Number(
+    process.env.ANALYSIS_CONCURRENCY || 2
+);
+const LLM_TIMEOUT_MS = 120000; // 2 minutes
+const MAX_RETRIES = 2;
+
+// Helper: Wrap promise with timeout
+const withTimeout = <T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    label: string
+): Promise<T> => {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+            () => reject(
+                new Error(`${label} timeout after ${timeoutMs}ms`)
+            ),
+            timeoutMs
+        )
+    );
+    return Promise.race([promise, timeoutPromise]);
+};
+
+// Helper: Exponential backoff delay
+const delay = (ms: number) =>
+    new Promise(resolve => setTimeout(resolve, ms));
 
 const parseWithLLM = async (
     text: string,
     systemPrompt: string,
     logger: ProcessingLogger,
     chunkIndex?: number,
-    totalChunks?: number
+    totalChunks?: number,
+    retryCount: number = 0
 ): Promise<ParsedDocument | null> => {
     const userPrompt = buildPrompt(text, chunkIndex, totalChunks);
     const startTime = Date.now();
+    const chunkInfo = chunkIndex !== undefined
+        ? ` chunk ${chunkIndex + 1}`
+        : '';
 
     try {
         await logger.llmRequest(MODEL, userPrompt.length, {
@@ -274,25 +304,39 @@ const parseWithLLM = async (
             totalChunks,
             textPreview: text.substring(0, 500),
             textLength: text.length,
+            retryCount,
         });
-        await logger.debug(`LLM Input - System prompt length: ${systemPrompt.length}`, {
-            systemPromptPreview: systemPrompt.substring(0, 300),
-        });
+        await logger.debug(
+            `LLM Input - System prompt length: ${systemPrompt.length}`,
+            {systemPromptPreview: systemPrompt.substring(0, 300)}
+        );
         await logger.debug(`LLM Input - User prompt preview`, {
             userPromptPreview: userPrompt.substring(0, 1000),
             userPromptLength: userPrompt.length,
         });
         
-        const response = await complete(systemPrompt, userPrompt, {maxTokens: 16000});
+        // Wrap LLM call with timeout
+        const response = await withTimeout(
+            complete(systemPrompt, userPrompt, {maxTokens: 16000}),
+            LLM_TIMEOUT_MS,
+            `LLM parse${chunkInfo}`
+        );
         
-        await logger.llmResponse(MODEL, response.length, Date.now() - startTime);
+        await logger.llmResponse(
+            MODEL,
+            response.length,
+            Date.now() - startTime
+        );
         await logger.debug(`LLM Output preview`, {
             responsePreview: response.substring(0, 1000),
             responseLength: response.length,
         });
 
         const parsed = extractJSON<ParsedDocument>(response);
-        await logger.parseResult(parsed.chapters.length, countVerses(parsed.chapters));
+        await logger.parseResult(
+            parsed.chapters.length,
+            countVerses(parsed.chapters)
+        );
         
         if (parsed.chapters.length > 0) {
             await logger.debug(`Parsed chapters summary`, {
@@ -306,8 +350,32 @@ const parseWithLLM = async (
         
         return parsed;
     } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Unknown error';
-        const chunkInfo = chunkIndex !== undefined ? ` chunk ${chunkIndex + 1}` : '';
+        const msg = error instanceof Error
+            ? error.message
+            : 'Unknown error';
+        const isRetryable = msg.includes('timeout') ||
+            msg.includes('rate limit') ||
+            msg.includes('ECONNRESET');
+        
+        // Retry logic for transient failures
+        if (retryCount < MAX_RETRIES && isRetryable) {
+            const backoffMs = (retryCount + 1) * 5000; // 5s, 10s
+            await logger.warn(
+                `Parse failed${chunkInfo}, retrying ` +
+                `(${retryCount + 1}/${MAX_RETRIES}) ` +
+                `after ${backoffMs}ms: ${msg}`
+            );
+            await delay(backoffMs);
+            return parseWithLLM(
+                text,
+                systemPrompt,
+                logger,
+                chunkIndex,
+                totalChunks,
+                retryCount + 1
+            );
+        }
+        
         await logger.error(`Parse failed${chunkInfo}: ${msg}`);
         return null;
     }
@@ -322,17 +390,26 @@ const parseChunks = async (
 
     await ctx.logger.info(`Starting chunk processing`, {
         totalChunks: chunks.length,
-        chunkSizes: chunks.map((c, i) => ({ chunk: i + 1, chars: c.text.length })),
+        chunkSizes: chunks.map((c, i) => ({
+            chunk: i + 1,
+            chars: c.text.length
+        })),
         totalChars: chunks.reduce((sum, c) => sum + c.text.length, 0),
     });
 
     await mapSeries(chunks, async (chunk, i) => {
-        await ctx.logger.chunkProcessing(i, chunks.length, chunk.text.length);
+        await ctx.logger.chunkProcessing(
+            i,
+            chunks.length,
+            chunk.text.length
+        );
         await ctx.logger.debug(`Chunk ${i + 1} content preview`, {
             chunkIndex: i,
             chunkLength: chunk.text.length,
             startPreview: chunk.text.substring(0, 300),
-            endPreview: chunk.text.substring(chunk.text.length - 300),
+            endPreview: chunk.text.substring(
+                chunk.text.length - 300
+            ),
         });
 
         const parsed = await parseWithLLM(
@@ -346,26 +423,43 @@ const parseChunks = async (
         if (parsed) {
             await storeChunkData(parsed, ctx);
             results.push(parsed);
-            await ctx.logger.info(`Chunk ${i + 1} stored successfully`, {
-                chaptersInChunk: parsed.chapters.length,
-                versesInChunk: countVerses(parsed.chapters),
-            });
+            await ctx.logger.info(
+                `Chunk ${i + 1} stored successfully`,
+                {
+                    chaptersInChunk: parsed.chapters.length,
+                    versesInChunk: countVerses(parsed.chapters),
+                }
+            );
         } else {
-            await ctx.logger.warn(`Chunk ${i + 1} returned no parsed data`);
+            await ctx.logger.warn(
+                `Chunk ${i + 1} returned no parsed data`
+            );
         }
     });
 
     return results;
 };
 
-const parseDocument = async (text: string, ctx: ProcessingContext): Promise<ParsedDocument> => {
+const parseDocument = async (
+    text: string,
+    ctx: ProcessingContext
+): Promise<ParsedDocument> => {
     const systemPrompt = loadPrompt('parse-document');
 
     if (text.length <= MAX_CHUNK_SIZE) {
         await ctx.logger.info('Single chunk document');
-        const result = await parseWithLLM(text, systemPrompt, ctx.logger);
+        const result = await parseWithLLM(
+            text,
+            systemPrompt,
+            ctx.logger
+        );
         if (result) await storeChunkData(result, ctx);
-        return result ?? {title: 'Unknown', description: '', language: 'Unknown', chapters: []};
+        return result ?? {
+            title: 'Unknown',
+            description: '',
+            language: 'Unknown',
+            chapters: []
+        };
     }
 
     const chunks = chunkText(text, MAX_CHUNK_SIZE);
@@ -377,7 +471,10 @@ const parseDocument = async (text: string, ctx: ProcessingContext): Promise<Pars
     const results = await parseChunks(chunks, systemPrompt, ctx);
     const combined = combineResults(results);
 
-    await ctx.logger.info(`Parsing complete: ${combined.chapters.length} chapters, ${countVerses(combined.chapters)} verses`);
+    await ctx.logger.info(
+        `Parsing complete: ${combined.chapters.length} chapters, ` +
+        `${countVerses(combined.chapters)} verses`
+    );
 return combined;
 };
 
@@ -394,12 +491,28 @@ interface VerseRowForAnalysis {
     analyzed: boolean;
 }
 
-const buildAnalysisPrompt = (bookTitle: string, verse: VerseRowForAnalysis): string => `Book: ${bookTitle}\nChapter: ${verse.chapter_number}\nVerse: ${verse.verse_number}\n\nOriginal Text:\n${verse.original_text}\n\nTranslation:\n${verse.translation}\n\nAnalyze this verse from a critical modern perspective (2026).`;
+const buildAnalysisPrompt = (
+    bookTitle: string,
+    verse: VerseRowForAnalysis
+): string =>
+    `Book: ${bookTitle}\n` +
+    `Chapter: ${verse.chapter_number}\n` +
+    `Verse: ${verse.verse_number}\n\n` +
+    `Original Text:\n${verse.original_text}\n\n` +
+    `Translation:\n${verse.translation}\n\n` +
+    `Analyze this verse from a critical modern perspective (2026).`;
 
-const generateAnalysis = async (bookTitle: string, verse: VerseRowForAnalysis) => {
+const generateAnalysis = async (
+    bookTitle: string,
+    verse: VerseRowForAnalysis
+) => {
     const systemPrompt = loadPrompt('analyze-verse');
     const userPrompt = buildAnalysisPrompt(bookTitle, verse);
-    const response = await complete(systemPrompt, userPrompt, {temperature: 0.3, maxTokens: 2000});
+    const response = await complete(
+        systemPrompt,
+        userPrompt,
+        {temperature: 0.3, maxTokens: 2000}
+    );
     return extractJSON<{
         modernEthics: string;
         genderAnalysis: string;
@@ -411,9 +524,15 @@ const generateAnalysis = async (bookTitle: string, verse: VerseRowForAnalysis) =
     }>(response);
 };
 
-async function runWithConcurrency<T>(items: T[], limit: number, work: (item: T, idx: number) => Promise<void>) {
+async function runWithConcurrency<T>(
+    items: T[],
+    limit: number,
+    work: (item: T, idx: number) => Promise<void>
+) {
     let i = 0;
-    const workers = Array.from({length: Math.max(1, limit)}, () => (async () => {
+    const workers = Array.from(
+        {length: Math.max(1, limit)},
+        () => (async () => {
         while (true) {
             const idx = i++;
             if (idx >= items.length) break;
@@ -423,17 +542,28 @@ async function runWithConcurrency<T>(items: T[], limit: number, work: (item: T, 
     await Promise.all(workers);
 }
 
-async function runAutomaticAnalysis(bookId: string, bookTitle: string, logger: ProcessingLogger) {
-    const verses = await getVersesByBookId(bookId) as VerseRowForAnalysis[];
+async function runAutomaticAnalysis(
+    bookId: string,
+    bookTitle: string,
+    logger: ProcessingLogger
+) {
+    const verses = await getVersesByBookId(bookId) as
+        VerseRowForAnalysis[];
     const targets = verses.filter(v => !v.analyzed);
     if (targets.length === 0) {
         await logger.info('No unanalyzed verses found');
         return;
     }
 
-    await logger.info(`Starting automatic analysis for ${targets.length} verses`, {concurrency: ANALYSIS_CONCURRENCY});
+    await logger.info(
+        `Starting automatic analysis for ${targets.length} verses`,
+        {concurrency: ANALYSIS_CONCURRENCY}
+    );
 
-    await runWithConcurrency(targets, ANALYSIS_CONCURRENCY, async (v) => {
+    await runWithConcurrency(
+        targets,
+        ANALYSIS_CONCURRENCY,
+        async (v) => {
         try {
             await logger.analysisStart(v.id, v.chapter_number, v.verse_number);
             const a = await generateAnalysis(bookTitle, v);
