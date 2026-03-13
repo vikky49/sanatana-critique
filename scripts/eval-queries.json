@@ -1,0 +1,76 @@
+[
+  {
+    "id": "gender-1",
+    "query": "verses about women's duties and obligations",
+    "category": "gender",
+    "expectedTags": ["misogyny"]
+  },
+  {
+    "id": "gender-2",
+    "query": "restrictions on women's behavior",
+    "category": "gender",
+    "expectedTags": ["misogyny", "discrimination"]
+  },
+  {
+    "id": "caste-1",
+    "query": "brahmin superiority and lower castes",
+    "category": "caste",
+    "expectedTags": ["casteism", "discrimination"]
+  },
+  {
+    "id": "caste-2",
+    "query": "shudra duties and prohibitions",
+    "category": "caste",
+    "expectedTags": ["casteism"]
+  },
+  {
+    "id": "violence-1",
+    "query": "punishment and violence for transgressions",
+    "category": "violence",
+    "expectedTags": ["violence"]
+  },
+  {
+    "id": "violence-2",
+    "query": "war dharma and killing enemies",
+    "category": "violence",
+    "expectedTags": ["violence"]
+  },
+  {
+    "id": "authority-1",
+    "query": "obedience to guru and king",
+    "category": "authority",
+    "expectedTags": ["authoritarianism"]
+  },
+  {
+    "id": "ritual-1",
+    "query": "animal sacrifice and ritual purity",
+    "category": "ritual",
+    "expectedTags": ["violence", "superstition"]
+  },
+  {
+    "id": "science-1",
+    "query": "creation of universe and cosmology",
+    "category": "scientific",
+    "expectedTags": ["pseudoscience"]
+  },
+  {
+    "id": "slavery-1",
+    "query": "servants and slaves ownership",
+    "category": "slavery",
+    "expectedTags": ["slavery", "discrimination"]
+  },
+  {
+    "id": "multilingual-1",
+    "query": "स्त्री धर्म और कर्तव्य",
+    "category": "gender",
+    "language": "hindi",
+    "expectedTags": ["misogyny"]
+  },
+  {
+    "id": "multilingual-2",
+    "query": "वर्ण व्यवस्था और ब्राह्मण",
+    "category": "caste",
+    "language": "hindi",
+    "expectedTags": ["casteism"]
+  }
+]

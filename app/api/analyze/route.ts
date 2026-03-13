@@ -17,6 +17,12 @@ interface AnalysisResult {
     problematicScore: number;
     tags: string[];
     summary: string;
+    // Enhanced fields
+    scientificAccuracy?: string | null;
+    logicalConsistency?: string | null;
+    powerDynamics?: string | null;
+    culturalContext?: string | null;
+    confidence?: number;
 }
 
 interface VerseRow {
@@ -261,6 +267,14 @@ export async function POST(request: NextRequest) {
             problematicScore: analysisResult.problematicScore,
             tags: analysisResult.tags,
             summary: analysisResult.summary,
+            // Enhanced fields
+            scientificAccuracy: analysisResult.scientificAccuracy,
+            logicalConsistency: analysisResult.logicalConsistency,
+            powerDynamics: analysisResult.powerDynamics,
+            culturalContext: analysisResult.culturalContext,
+            confidence: analysisResult.confidence,
+            needsReview: (analysisResult.confidence ?? 1) < 0.6,
+            version: 1,
         });
 
         await updateVerseAnalyzed(verse.id);

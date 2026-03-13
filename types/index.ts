@@ -62,11 +62,22 @@ export interface Analysis {
   contradictions?: string;
   historicalContext?: string;
   
+  // Enhanced perspectives
+  scientificAccuracy?: string; // Evaluate factual/scientific claims
+  logicalConsistency?: string; // Deep logical analysis
+  powerDynamics?: string; // Authority, obedience, power structures
+  culturalContext?: string; // Universal vs culturally-bound teachings
+  
   // Metadata
   problematicScore: number; // 0-10
   tags: string[];
   summary: string;
   citations?: string[]; // References to other verses
+  
+  // Quality metrics
+  confidence?: number; // LLM confidence 0-1
+  needsReview?: boolean; // Flag for human review
+  version?: number; // Analysis version for tracking improvements
 }
 
 // ==================== AI Processing ====================

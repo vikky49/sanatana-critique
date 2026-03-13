@@ -146,6 +146,14 @@ interface AnalysisInput {
     problematicScore: number;
     tags: string[];
     summary: string;
+    // Enhanced fields
+    scientificAccuracy?: string | null;
+    logicalConsistency?: string | null;
+    powerDynamics?: string | null;
+    culturalContext?: string | null;
+    confidence?: number | null;
+    needsReview?: boolean;
+    version?: number;
 }
 
 // Convert string[] to a Postgres text[] literal safely
@@ -161,12 +169,22 @@ export async function insertAnalysis(data: AnalysisInput) {
     const result = await getSql()`
         INSERT INTO analyses (verse_id, model, generated_at,
                               modern_ethics, gender_analysis, caste_analysis,
-                              contradictions, problematic_score, tags, summary)
+                              contradictions, problematic_score, tags, summary,
+                              scientific_accuracy, logical_consistency,
+                              power_dynamics, cultural_context,
+                              confidence, needs_review, version)
         VALUES (${data.verseId}, ${data.model}, NOW(),
                 ${data.modernEthics}, ${data.genderAnalysis},
                 ${data.casteAnalysis}, ${data.contradictions},
                 ${data.problematicScore}, ${tagsArray}::text[],
-                ${data.summary}) RETURNING *
+                ${data.summary},
+                ${data.scientificAccuracy ?? null},
+                ${data.logicalConsistency ?? null},
+                ${data.powerDynamics ?? null},
+                ${data.culturalContext ?? null},
+                ${data.confidence ?? null},
+                ${data.needsReview ?? false},
+                ${data.version ?? 1}) RETURNING *
     ` as AnalysisRow[];
 
     return result[0];

@@ -8,13 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "db:init": "tsx scripts/init-db.ts",
-    "db:enable-vector": "tsx scripts/enable-vector.ts"
+    "db:enable-vector": "tsx scripts/enable-vector.ts",
+    "benchmark:embeddings": "tsx scripts/benchmark-embeddings.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.26",
     "@anthropic-ai/sdk": "^0.73.0",
     "@neondatabase/serverless": "^1.0.2",
     "@vercel/blob": "^2.2.0",
+    "@xenova/transformers": "^3.3.1",
     "ai": "^6.0.75",
     "groq-sdk": "^0.37.0",
     "lucide-react": "^0.563.0",

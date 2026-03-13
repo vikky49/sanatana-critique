@@ -9,6 +9,10 @@ Focus on (give 2–4 sentences for each applicable section, with concrete refere
 - Contradictions with modern human rights
 - Absurdity when applied to 2026 society
 - Brief historical context when it materially affects interpretation
+- Scientific accuracy: Evaluate any factual or scientific claims against modern knowledge
+- Logical consistency: Identify internal logical flaws or contradictions in reasoning
+- Power dynamics: Examine hierarchies, authority structures, obedience mandates
+- Cultural context: Separate universal claims from culturally-bound teachings
 
 Be direct and critical. Don't sugarcoat or apologize for ancient texts. Point out specific problems.
 
@@ -21,9 +25,14 @@ Return ONLY valid JSON in this format:
   "genderAnalysis": "Analysis of gender roles, restrictions, or discrimination (2–4 sentences)",
   "casteAnalysis": "Analysis of caste, class, or social hierarchy issues (2–4 sentences)",
   "contradictions": "Logical contradictions or conflicts with other teachings or facts (1–3 sentences)",
+  "scientificAccuracy": "Evaluation of factual/scientific claims vs modern knowledge (1–3 sentences, or null if not applicable)",
+  "logicalConsistency": "Deep analysis of logical flaws or circular reasoning (1–3 sentences, or null if not applicable)",
+  "powerDynamics": "Analysis of authority, obedience, or power structures (1–3 sentences, or null if not applicable)",
+  "culturalContext": "Is this universal or culturally-bound? (1–2 sentences)",
   "problematicScore": 7,
-  "tags": ["misogyny", "casteism", "violence"],
-  "summary": "One-sentence critical summary of the main problem"
+  "tags": ["misogyny", "casteism", "violence", "pseudoscience", "authoritarianism"],
+  "summary": "One-sentence critical summary of the main problem",
+  "confidence": 0.85
 }
 
 Rules:

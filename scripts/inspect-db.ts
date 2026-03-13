@@ -73,6 +73,31 @@ async function inspectDatabase() {
       SELECT COUNT(*) as count FROM verses WHERE book_id = ${bookId}
     `;
     console.log(`\nTotal verses in database: ${totalVerses[0].count}`);
+
+    // Check analyses counts
+    const totalAnalyses = await sql`
+      SELECT COUNT(*) as count FROM analyses a
+      JOIN verses v ON a.verse_id = v.id
+      WHERE v.book_id = ${bookId}
+    `;
+    console.log(`Total analyses for this book: ${totalAnalyses[0].count}`);
+
+    // Show top analyzed verses by score
+    const topAnalyzed = await sql`
+      SELECT v.chapter_number, v.verse_number, a.problematic_score, a.tags
+      FROM analyses a
+      JOIN verses v ON a.verse_id = v.id
+      WHERE v.book_id = ${bookId}
+      ORDER BY a.problematic_score DESC
+      LIMIT 5
+    `;
+    console.log('\nTop analyzed verses (sample):');
+    topAnalyzed.forEach(r => {
+      const tags = Array.isArray(r.tags) ? r.tags.join(',') : String(r.tags);
+      console.log(
+        `  Ch ${r.chapter_number}:$${r.verse_number} score=${r.problematic_score} tags=[${tags}]`
+      );
+    });
     
     // Check processing logs for clues
     console.log('\nRecent processing logs (last 10):');
